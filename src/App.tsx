@@ -1,0 +1,32 @@
+import React from "react";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import Home from "./pages/Home";
+
+function App() {
+  return (
+    <BrowserRouter>
+      <div className="min-h-screen flex flex-col">
+        {/* Header: 固定 */}
+        <header className="bg-blue-600 text-white p-4 shadow fixed top-0 left-0 w-full z-10">
+          <div className="container mx-auto text-2xl font-semibold">
+            Example Page
+          </div>
+        </header>
+
+        {/* Main Routing: ヘッダー・フッター分の高さを除外 */}
+        <main className="flex-grow bg-gray-100 pt-20 pb-16">
+          <Routes>
+            <Route path="/" element={<Home />} />
+          </Routes>
+        </main>
+
+        {/* Footer: 固定 */}
+        <footer className="bg-blue-600 text-white text-center py-4 fixed bottom-0 left-0 w-full z-10">
+          &copy; All rights reserved.
+        </footer>
+      </div>
+    </BrowserRouter>
+  );
+}
+
+export default App;

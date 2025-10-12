@@ -5,6 +5,7 @@ interface ButtonProps {
   className?: string;
   children: React.ReactNode;
   onMouseDown?: (e: React.MouseEvent<HTMLButtonElement>) => void;
+  border?: "rounded" | "square";
 }
 
 export const IconButton: React.FC<ButtonProps> = ({
@@ -12,12 +13,17 @@ export const IconButton: React.FC<ButtonProps> = ({
   className = "",
   children,
   onMouseDown,
-}) => (
-  <button
-    onClick={onClick}
-    onMouseDown={onMouseDown}
-    className={`flex items-center justify-center rounded aspect-square ${className}`}
-  >
-    {children}
-  </button>
-);
+  border = "rounded",
+}) => {
+  const borderRadius = border === "rounded" ? "rounded" : "rounded-none";
+
+  return (
+    <button
+      onClick={onClick}
+      onMouseDown={onMouseDown}
+      className={`flex items-center justify-center ${borderRadius} aspect-square ${className}`}
+    >
+      {children}
+    </button>
+  );
+};

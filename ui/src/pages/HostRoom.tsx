@@ -7,7 +7,10 @@ import { ReadOnlyWhiteboard } from "../features/whiteboard/ReadOnlyWhiteboard";
 const HostRoom: React.FC = () => {
   const { roomId } = useParams<{ roomId: string }>();
   const memberId = getCookie("memberId") ?? "";
-  const roomState = useRoomSocket(roomId ?? "", memberId);
+  const { roomState, completedMemberIds } = useRoomSocket(
+    roomId ?? "",
+    memberId
+  );
 
   // 人数取得
   const members = roomState ? roomState.members : [];
@@ -42,7 +45,13 @@ const HostRoom: React.FC = () => {
                 </div>
                 <div className="flex w-full h-full items-center justify-center">
                   <div className="border w-56 h-56 aspect-square border-2 border-blue-400 shadow-lg bg-blue-50 flex items-center justify-center">
-                    <ReadOnlyWhiteboard />
+                    <ReadOnlyWhiteboard
+                      mode={
+                        completedMemberIds.includes(member.id)
+                          ? "star"
+                          : "question"
+                      }
+                    />
                   </div>
                 </div>
               </div>

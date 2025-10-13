@@ -10,6 +10,7 @@ export interface RoomState {
 
 export function useRoomSocket(roomId: string, memberId: string) {
   const [roomState, setRoomState] = useState<RoomState | null>(null);
+  const [completedMemberIds, setCompletedMemberIds] = useState<string[]>([]);
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
@@ -19,11 +20,16 @@ export function useRoomSocket(roomId: string, memberId: string) {
     socket.on("roomState", (state: RoomState) => {
       setRoomState({ ...state, meId: memberId });
     });
+    socket.on("memberCompleted", (completedId: string) => {
+      setCompletedMemberIds((prev) =>
+        prev.includes(completedId) ? prev : [...prev, completedId]
+      );
+    });
     return () => {
       socket.emit("leave", { roomId, memberId });
       socket.disconnect();
     };
   }, [roomId, memberId]);
 
-  return roomState;
+  return { roomState, socket: socketRef.current, completedMemberIds };
 }

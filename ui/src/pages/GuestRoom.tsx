@@ -13,7 +13,7 @@ interface GuestRoomProps {
 
 const GuestRoom: React.FC<GuestRoomProps> = ({ memberId }) => {
   const { roomId } = useParams<{ roomId: string }>();
-  const roomState = useRoomSocket(roomId ?? "", memberId);
+  const { roomState, socket } = useRoomSocket(roomId ?? "", memberId);
   // Hostを除外したメンバーリスト
   const members = roomState ? roomState.members.filter((m) => !m.isHost) : [];
   const meId = memberId;
@@ -68,8 +68,10 @@ const GuestRoom: React.FC<GuestRoomProps> = ({ memberId }) => {
                     <div className="flex flex-col justify-start">
                       <IconButton
                         onClick={() => {
-                          // 決定処理
-                          console.log("描画内容を決定しました");
+                          // 完了イベントをサーバーに送信
+                          if (socket && roomId) {
+                            socket.emit("complete", { memberId, roomId });
+                          }
                         }}
                         className="bg-green-500 hover:bg-green-600 text-white w-12 h-12 text-lg font-bold shadow-lg transition-all hover:scale-110"
                         border="square"

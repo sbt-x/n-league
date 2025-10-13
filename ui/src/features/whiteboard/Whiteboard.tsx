@@ -5,6 +5,7 @@ import { useTool } from "./hooks/useTool.ts";
 
 export type WhiteboardProps = {
   showToolbar?: boolean;
+  disabled?: boolean;
 };
 
 export type WhiteboardHandle = {
@@ -12,7 +13,7 @@ export type WhiteboardHandle = {
 };
 
 export const Whiteboard = forwardRef<WhiteboardHandle, WhiteboardProps>(
-  ({ showToolbar = false }, ref) => {
+  ({ showToolbar = false, disabled = false }, ref) => {
     const { tool, setTool, color, setColor, width, setWidth } = useTool();
     const canvasRef = React.useRef<{ clear: () => void }>(null);
 
@@ -39,7 +40,7 @@ export const Whiteboard = forwardRef<WhiteboardHandle, WhiteboardProps>(
         )}
         {/* Canvas領域 */}
         <div className="flex-1 w-full h-full">
-          <Canvas ref={canvasRef} tool={tool} color={color} width={width} />
+          <Canvas ref={canvasRef} tool={tool} color={color} width={width} disabled={disabled} />
         </div>
       </div>
     );

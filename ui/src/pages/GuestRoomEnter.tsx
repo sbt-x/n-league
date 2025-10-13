@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useParams } from "react-router-dom";
 import axios from "axios";
 import GuestRoom from "./GuestRoom";
+import { setCookie } from "../utils/cookie";
 
 const GuestRoomEnter: React.FC = () => {
   const { roomId: paramRoomId } = useParams<{ roomId?: string }>();
@@ -16,25 +17,24 @@ const GuestRoomEnter: React.FC = () => {
       const response = await axios.post(
         `http://localhost:3000/rooms/${roomId}/join`,
         {
-          userName,
+          name: userName,
         }
       );
       setJoinInfo(response.data);
       setIsJoined(true);
       setError("");
+      // memberIdをcookieに保存
+      if (response.data?.memberId) {
+        setCookie("memberId", response.data.memberId);
+      }
     } catch (err: any) {
       setError(err.response?.data?.message || "入室に失敗しました");
     }
   };
 
   if (isJoined && joinInfo) {
-    // APIのレスポンスに合わせてGuestRoomへ必要なpropsを渡す
-    return (
-      <GuestRoom
-        myPosition={joinInfo.position}
-        totalPlayers={joinInfo.totalPlayers}
-      />
-    );
+    // memberIdをGuestRoomへ渡す
+    return <GuestRoom memberId={joinInfo.memberId} />;
   }
 
   return (

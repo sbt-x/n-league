@@ -4,21 +4,19 @@ import type { WhiteboardHandle } from "../features/whiteboard/Whiteboard";
 import { ReadOnlyWhiteboard } from "../features/whiteboard/ReadOnlyWhiteboard";
 import { IconButton } from "../components/IconButton";
 import { FaCheck, FaTrash } from "react-icons/fa";
+import { useRoomSocket } from "../hooks/useRoomSocket";
+import { useParams } from "react-router-dom";
 
 interface GuestRoomProps {
-  myPosition: number; // 自分の順番 (0から開始)
-  totalPlayers: number; // プレイヤー合計人数
+  memberId: string;
 }
 
-const GuestRoom: React.FC<GuestRoomProps> = ({ myPosition, totalPlayers }) => {
-  // すべてのプレイヤーを順番通りに配列作成（描画エリア表示用）
-  const allPlayersInOrder = Array.from({ length: totalPlayers }, (_, i) => ({
-    id: i,
-    name: `プレイヤー${i}`,
-    position: i,
-    isMe: i === myPosition,
-  }));
-
+const GuestRoom: React.FC<GuestRoomProps> = ({ memberId }) => {
+  const { roomId } = useParams<{ roomId: string }>();
+  const roomState = useRoomSocket(roomId ?? "", memberId);
+  // Hostを除外したメンバーリスト
+  const members = roomState ? roomState.members.filter((m) => !m.isHost) : [];
+  const meId = memberId;
   const whiteboardRef = useRef<WhiteboardHandle>(null);
 
   return (

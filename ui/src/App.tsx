@@ -1,6 +1,9 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Home from "./pages/Home";
 import GuestRoom from "./pages/GuestRoom";
+import GuestRoomEnter from "./pages/GuestRoomEnter";
+import CreateHostRoom from "./pages/CreateHostRoom";
+import HostRoom from "./pages/HostRoom";
 
 function App() {
   return (
@@ -21,6 +24,12 @@ function App() {
               path="/guest-room"
               element={<GuestRoom myPosition={4} totalPlayers={6} />}
             />
+            <Route
+              path="/guest-room-enter/:roomId"
+              element={<GuestRoomEnter />}
+            />
+            <Route path="/create-host-room" element={<CreateHostRoom />} />
+            <Route path="/host-room/:roomId" element={<HostRoom />} />
           </Routes>
         </main>
 

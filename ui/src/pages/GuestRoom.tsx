@@ -1,9 +1,10 @@
-import React, { useRef } from "react";
+import React, { useRef, useState } from "react";
 import { Whiteboard } from "../features/whiteboard/Whiteboard";
 import type { WhiteboardHandle } from "../features/whiteboard/Whiteboard";
 import { ReadOnlyWhiteboard } from "../features/whiteboard/ReadOnlyWhiteboard";
 import { IconButton } from "../components/IconButton";
 import { FaCheck, FaTrash } from "react-icons/fa";
+import { TbCancel } from "react-icons/tb";
 import { useRoomSocket } from "../hooks/useRoomSocket";
 import { useParams } from "react-router-dom";
 
@@ -18,6 +19,29 @@ const GuestRoom: React.FC<GuestRoomProps> = ({ memberId }) => {
   const members = roomState ? roomState.members.filter((m) => !m.isHost) : [];
   const meId = memberId;
   const whiteboardRef = useRef<WhiteboardHandle>(null);
+  const [isSent, setIsSent] = useState(false);
+  const [isSending, setIsSending] = useState(false);
+
+  // 送信処理
+  const handleSend = async () => {
+    setIsSending(true);
+    // 送信アニメーション（例: 0.8秒）
+    await new Promise((res) => setTimeout(res, 800));
+    if (socket && roomId) {
+      socket.emit("complete", { memberId, roomId });
+    }
+    setIsSending(false);
+    setIsSent(true);
+  };
+
+  // 送信取り消し
+  const handleCancelSend = () => {
+    setIsSent(false);
+    // 必要ならサーバーに取り消しイベント送信
+    if (socket && roomId) {
+      socket.emit("cancelComplete", { memberId, roomId });
+    }
+  };
 
   return (
     <div className="w-full h-full p-4 flex flex-col gap-4">
@@ -59,34 +83,54 @@ const GuestRoom: React.FC<GuestRoomProps> = ({ memberId }) => {
                     }`}
                   >
                     {isMe ? (
-                      <Whiteboard showToolbar={false} ref={whiteboardRef} />
+                      <Whiteboard
+                        showToolbar={false}
+                        ref={whiteboardRef}
+                        isReadOnly={isSent}
+                      />
                     ) : (
                       <ReadOnlyWhiteboard />
                     )}
                   </div>
                   {isMe && (
                     <div className="flex flex-col justify-start">
-                      <IconButton
-                        onClick={() => {
-                          // 完了イベントをサーバーに送信
-                          if (socket && roomId) {
-                            socket.emit("complete", { memberId, roomId });
-                          }
-                        }}
-                        className="bg-green-500 hover:bg-green-600 text-white w-12 h-12 text-lg font-bold shadow-lg transition-all hover:scale-110"
-                        border="square"
-                      >
-                        <FaCheck />
-                      </IconButton>
-                      <IconButton
-                        onClick={() => {
-                          whiteboardRef.current?.clear();
-                        }}
-                        className="bg-red-500 hover:bg-red-600 text-white w-12 h-12 text-lg font-bold shadow-lg transition-all hover:scale-110"
-                        border="square"
-                      >
-                        <FaTrash />
-                      </IconButton>
+                      {!isSent ? (
+                        <>
+                          <IconButton
+                            onClick={handleSend}
+                            disabled={isSending}
+                            className={`bg-green-500 hover:bg-green-600 text-white w-12 h-12 text-lg font-bold shadow-lg transition-all ${isSending ? "animate-pulse opacity-70" : "hover:scale-110"}`}
+                            border="square"
+                          >
+                            {isSending ? (
+                              <span className="animate-spin">⏳</span>
+                            ) : (
+                              <FaCheck />
+                            )}
+                          </IconButton>
+                          <IconButton
+                            onClick={() => {
+                              whiteboardRef.current?.clear();
+                            }}
+                            className="bg-red-500 hover:bg-red-600 text-white w-12 h-12 text-lg font-bold shadow-lg transition-all hover:scale-110"
+                            border="square"
+                          >
+                            <FaTrash />
+                          </IconButton>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex flex-col items-center mb-2">
+                            <IconButton
+                              onClick={handleCancelSend}
+                              className="bg-yellow-400 hover:bg-yellow-500 text-white w-12 h-12 text-lg font-bold shadow-lg transition-all hover:scale-110"
+                              border="square"
+                            >
+                              <TbCancel />
+                            </IconButton>
+                          </div>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>

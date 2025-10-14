@@ -6,6 +6,7 @@ interface ButtonProps {
   children: React.ReactNode;
   onMouseDown?: (e: React.MouseEvent<HTMLButtonElement>) => void;
   border?: "rounded" | "square";
+  disabled?: boolean;
 }
 
 export const IconButton: React.FC<ButtonProps> = ({
@@ -14,14 +15,16 @@ export const IconButton: React.FC<ButtonProps> = ({
   children,
   onMouseDown,
   border = "rounded",
+  disabled = false,
 }) => {
   const borderRadius = border === "rounded" ? "rounded" : "rounded-none";
 
   return (
     <button
-      onClick={onClick}
+      onClick={disabled ? undefined : onClick}
       onMouseDown={onMouseDown}
-      className={`flex items-center justify-center ${borderRadius} aspect-square ${className}`}
+      className={`flex items-center justify-center ${borderRadius} aspect-square ${className} ${disabled ? "opacity-60 cursor-not-allowed" : ""}`}
+      disabled={disabled}
     >
       {children}
     </button>

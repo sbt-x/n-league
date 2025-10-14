@@ -14,7 +14,10 @@ interface GuestRoomProps {
 
 const GuestRoom: React.FC<GuestRoomProps> = ({ memberId }) => {
   const { roomId } = useParams<{ roomId: string }>();
-  const { roomState, socket } = useRoomSocket(roomId ?? "", memberId);
+  const { roomState, socket, completedMemberIds } = useRoomSocket(
+    roomId ?? "",
+    memberId
+  );
   // Hostを除外したメンバーリスト
   const members = roomState ? roomState.members.filter((m) => !m.isHost) : [];
   const meId = memberId;
@@ -34,6 +37,12 @@ const GuestRoom: React.FC<GuestRoomProps> = ({ memberId }) => {
 
   // 送信取り消し
   const handleCancelSend = () => {
+    console.log(
+      "Cancelling completion for memberId:",
+      memberId,
+      "roomId:",
+      roomId
+    );
     setIsSent(false);
     // 必要ならサーバーに取り消しイベント送信
     if (socket && roomId) {
@@ -67,17 +76,26 @@ const GuestRoom: React.FC<GuestRoomProps> = ({ memberId }) => {
               >
                 <div
                   className={`w-full text-sm mb-2 text-center font-medium select-none ${
-                    isMe ? "text-blue-600 font-bold" : "text-gray-600 text-xs"
+                    isMe
+                      ? "text-blue-600 font-bold"
+                      : completedMemberIds.includes(member.id)
+                        ? "text-green-600 font-bold text-xs"
+                        : "text-gray-600 text-xs"
                   }`}
                 >
-                  {member.name} {isMe && "(あなた)"}
+                  {member.name} {isMe && "(あなた)"}{" "}
+                  {!isMe && completedMemberIds.includes(member.id) && "✓"}
                 </div>
                 <div className={`${isMe ? "flex" : "w-full h-full"}`}>
                   <div
                     className={`border flex items-center justify-center ${
                       isMe
                         ? "w-56 h-56 aspect-square border-2 border-blue-400 shadow-lg bg-blue-50"
-                        : "w-full h-full border border-gray-200 bg-white"
+                        : `w-full h-full border-2 ${
+                            completedMemberIds.includes(member.id)
+                              ? "border-green-400 bg-green-50"
+                              : "border-gray-200 bg-white"
+                          }`
                     }`}
                   >
                     {isMe ? (
@@ -88,7 +106,13 @@ const GuestRoom: React.FC<GuestRoomProps> = ({ memberId }) => {
                         isDimmed={isSent}
                       />
                     ) : (
-                      <ReadOnlyWhiteboard />
+                      <ReadOnlyWhiteboard
+                        mode={
+                          completedMemberIds.includes(member.id)
+                            ? "star"
+                            : "question"
+                        }
+                      />
                     )}
                   </div>
                   {isMe && (

@@ -21,9 +21,14 @@ export function useRoomSocket(roomId: string, memberId: string) {
       setRoomState({ ...state, meId: memberId });
     });
     socket.on("memberCompleted", (completedId: string) => {
+      console.log("memberCompleted received:", completedId);
       setCompletedMemberIds((prev) =>
         prev.includes(completedId) ? prev : [...prev, completedId]
       );
+    });
+    socket.on("memberCancelled", (cancelledId: string) => {
+      console.log("memberCancelled received:", cancelledId);
+      setCompletedMemberIds((prev) => prev.filter((id) => id !== cancelledId));
     });
     return () => {
       socket.emit("leave", { roomId, memberId });

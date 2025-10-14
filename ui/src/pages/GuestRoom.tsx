@@ -85,6 +85,7 @@ const GuestRoom: React.FC<GuestRoomProps> = ({ memberId }) => {
                         showToolbar={false}
                         ref={whiteboardRef}
                         isReadOnly={isSent}
+                        isDimmed={isSent}
                       />
                     ) : (
                       <ReadOnlyWhiteboard />

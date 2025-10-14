@@ -6,6 +6,7 @@ import { useTool } from "./hooks/useTool.ts";
 export type WhiteboardProps = {
   showToolbar?: boolean;
   isReadOnly?: boolean;
+  isDimmed?: boolean;
 };
 
 export type WhiteboardHandle = {
@@ -13,7 +14,7 @@ export type WhiteboardHandle = {
 };
 
 export const Whiteboard = forwardRef<WhiteboardHandle, WhiteboardProps>(
-  ({ showToolbar = false, isReadOnly = false }, ref) => {
+  ({ showToolbar = false, isReadOnly = false, isDimmed = false }, ref) => {
     const { tool, setTool, color, setColor, width, setWidth } = useTool();
     const canvasRef = React.useRef<{ clear: () => void }>(null);
 
@@ -40,14 +41,14 @@ export const Whiteboard = forwardRef<WhiteboardHandle, WhiteboardProps>(
         )}
         {/* Canvas領域 */}
         <div className="flex-1 w-full h-full relative">
-          <Canvas ref={canvasRef} tool={tool} color={color} width={width} />
-          {isReadOnly && (
-            <div className="absolute inset-0 bg-gray-700 bg-opacity-40 flex items-center justify-center pointer-events-auto z-10">
-              <span className="text-white text-lg font-bold">
-                編集できません
-              </span>
-            </div>
-          )}
+          <Canvas
+            ref={canvasRef}
+            tool={tool}
+            color={color}
+            width={width}
+            isReadOnly={isReadOnly}
+            isDimmed={isDimmed}
+          />
         </div>
       </div>
     );

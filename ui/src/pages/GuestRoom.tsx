@@ -23,10 +23,8 @@ const GuestRoom: React.FC<GuestRoomProps> = ({ memberId }) => {
   const [isSending, setIsSending] = useState(false);
 
   // 送信処理
-  const handleSend = async () => {
+  const handleSend = () => {
     setIsSending(true);
-    // 送信アニメーション（例: 0.8秒）
-    await new Promise((res) => setTimeout(res, 800));
     if (socket && roomId) {
       socket.emit("complete", { memberId, roomId });
     }

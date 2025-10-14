@@ -1,15 +1,13 @@
 import React, { useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
-import GuestRoom from "./GuestRoom";
 import { setCookie } from "../utils/cookie";
 
 const GuestRoomEnter: React.FC = () => {
   const { roomId: paramRoomId } = useParams<{ roomId?: string }>();
+  const navigate = useNavigate();
   const [roomId, setRoomId] = useState(paramRoomId ?? "");
   const [userName, setUserName] = useState("");
-  const [isJoined, setIsJoined] = useState(false);
-  const [joinInfo, setJoinInfo] = useState<any>(null);
   const [error, setError] = useState("");
 
   const handleJoinRoom = async () => {
@@ -20,22 +18,16 @@ const GuestRoomEnter: React.FC = () => {
           name: userName,
         }
       );
-      setJoinInfo(response.data);
-      setIsJoined(true);
       setError("");
       // memberIdをcookieに保存
       if (response.data?.memberId) {
         setCookie("memberId", response.data.memberId);
       }
+      navigate(`/rooms/guest-room/${roomId}`);
     } catch (err: any) {
       setError(err.response?.data?.message || "入室に失敗しました");
     }
   };
-
-  if (isJoined && joinInfo) {
-    // memberIdをGuestRoomへ渡す
-    return <GuestRoom memberId={joinInfo.memberId} />;
-  }
 
   return (
     <div className="flex flex-col items-center justify-center h-screen">

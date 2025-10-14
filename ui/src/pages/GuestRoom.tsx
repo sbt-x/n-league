@@ -8,12 +8,11 @@ import { TbCancel } from "react-icons/tb";
 import { useRoomSocket } from "../hooks/useRoomSocket";
 import { useParams } from "react-router-dom";
 
-interface GuestRoomProps {
-  memberId: string;
-}
+import { getCookie } from "../utils/cookie";
 
-const GuestRoom: React.FC<GuestRoomProps> = ({ memberId }) => {
+const GuestRoom: React.FC = () => {
   const { roomId } = useParams<{ roomId: string }>();
+  const memberId = getCookie("memberId") ?? "";
   const { roomState, socket, completedMemberIds } = useRoomSocket(
     roomId ?? "",
     memberId

@@ -300,7 +300,9 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
             ref={canvasRef}
             width={canvasSize.width}
             height={canvasSize.height}
-            className="border border-gray-300 bg-white cursor-none w-full h-full block"
+            className={`border border-gray-300 bg-white w-full h-full block ${
+              isReadOnly ? "cursor-default" : "cursor-none"
+            }`}
             style={{ width: "100%", height: "100%" }}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
@@ -309,7 +311,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
             onPointerLeave={handlePointerLeave}
           />
           {/* Custom Cursor */}
-          {isHovered && cursorPosition && (
+          {isHovered && cursorPosition && !isReadOnly && (
             <div
               className="absolute pointer-events-none border-2 rounded-full"
               style={{
@@ -325,9 +327,9 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
           )}
           {/* Dimmed Overlay */}
           {isDimmed && (
-            <div 
-              className="absolute inset-0 pointer-events-none" 
-              style={{ backgroundColor: 'rgba(0, 0, 0, 0.3)' }}
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{ backgroundColor: "rgba(0, 0, 0, 0.3)" }}
             />
           )}
         </div>

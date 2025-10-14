@@ -15,6 +15,8 @@ type CanvasProps = {
   width: number;
   onClear?: () => void;
   onUndo?: () => void;
+  isReadOnly?: boolean;
+  isDimmed?: boolean;
 };
 
 export type CanvasHandle = {
@@ -22,7 +24,7 @@ export type CanvasHandle = {
 };
 
 export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
-  ({ tool, color, width }, ref) => {
+  ({ tool, color, width, isReadOnly = false, isDimmed = false }, ref) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     // オフスクリーンキャンバスで既存ストロークをキャッシュ
@@ -219,6 +221,8 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
     }, [strokes, isDrawing]);
 
     function handlePointerDown(e: React.PointerEvent) {
+      if (isReadOnly) return;
+
       const canvas = canvasRef.current;
       if (!canvas) return;
 
@@ -241,7 +245,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
       setCursorPosition({ x, y });
 
       // Continue drawing if currently drawing - requestAnimationFrameでスロットリング
-      if (isDrawing) {
+      if (isDrawing && !isReadOnly) {
         // 前のフレームをキャンセル
         if (rafIdRef.current !== null) {
           cancelAnimationFrame(rafIdRef.current);
@@ -256,6 +260,8 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
     }
 
     function handlePointerUp() {
+      if (isReadOnly) return;
+
       // クリーンアップ
       if (rafIdRef.current !== null) {
         cancelAnimationFrame(rafIdRef.current);
@@ -294,7 +300,9 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
             ref={canvasRef}
             width={canvasSize.width}
             height={canvasSize.height}
-            className="border border-gray-300 bg-white cursor-none w-full h-full block"
+            className={`border border-gray-300 bg-white w-full h-full block ${
+              isReadOnly ? "cursor-default" : "cursor-none"
+            }`}
             style={{ width: "100%", height: "100%" }}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
@@ -303,7 +311,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
             onPointerLeave={handlePointerLeave}
           />
           {/* Custom Cursor */}
-          {isHovered && cursorPosition && (
+          {isHovered && cursorPosition && !isReadOnly && (
             <div
               className="absolute pointer-events-none border-2 rounded-full"
               style={{
@@ -315,6 +323,13 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
                 backgroundColor:
                   tool === "eraser" ? "#ff00001a" : "transparent",
               }}
+            />
+          )}
+          {/* Dimmed Overlay */}
+          {isDimmed && (
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{ backgroundColor: "rgba(0, 0, 0, 0.3)" }}
             />
           )}
         </div>

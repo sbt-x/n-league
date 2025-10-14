@@ -18,6 +18,25 @@ import { OnEvent } from "@nestjs/event-emitter";
   },
 })
 export class RoomsGateway {
+  // プレイヤーが完了ボタンを押したとき
+  @SubscribeMessage("complete")
+  handleComplete(
+    @MessageBody() data: { roomId: string; memberId: string },
+    @ConnectedSocket() client: Socket
+  ) {
+    // 完了したmemberIdを全員に通知
+    this.server.to(data.roomId).emit("memberCompleted", data.memberId);
+  }
+
+  // プレイヤーが送信取り消しボタンを押したとき
+  @SubscribeMessage("cancelComplete")
+  handleCancelComplete(
+    @MessageBody() data: { roomId: string; memberId: string },
+    @ConnectedSocket() client: Socket
+  ) {
+    // 取り消したmemberIdを全員に通知
+    this.server.to(data.roomId).emit("memberCancelled", data.memberId);
+  }
   @WebSocketServer()
   server: Server;
 

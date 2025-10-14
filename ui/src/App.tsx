@@ -20,10 +20,7 @@ function App() {
         <main className="flex-1 bg-gray-100 pt-20 pb-8 h-full">
           <Routes>
             <Route path="/" element={<Home />} />
-            <Route
-              path="/guest-room"
-              element={<GuestRoom myPosition={4} totalPlayers={6} />}
-            />
+            <Route path="/rooms/guest-room/:roomId" element={<GuestRoom />} />
             <Route
               path="/guest-room-enter/:roomId"
               element={<GuestRoomEnter />}

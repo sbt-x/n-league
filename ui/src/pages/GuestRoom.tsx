@@ -8,11 +8,37 @@ import { TbCancel } from "react-icons/tb";
 import { useRoomSocket } from "../hooks/useRoomSocket";
 import { useParams } from "react-router-dom";
 
-import { getCookie } from "../utils/cookie";
+import { getCookie, setCookie } from "../utils/cookie";
+import axios from "axios";
+import { jwtDecode } from "jwt-decode";
 
 const GuestRoom: React.FC = () => {
   const { roomId } = useParams<{ roomId: string }>();
-  const memberId = getCookie("memberId") ?? "";
+  // memberId: prefer server-issued memberId cookie, fallback to jwt.uuid
+  const [memberId, setMemberId] = useState<string>("");
+  React.useEffect(() => {
+    const mid = getCookie("memberId");
+    if (mid) {
+      setMemberId(mid);
+      return;
+    }
+    const jwt = getCookie("userJwt");
+    if (jwt) {
+      try {
+        const decoded: any = jwtDecode(jwt);
+        setMemberId(decoded.uuid);
+      } catch {
+        setMemberId("");
+      }
+    } else {
+      // 初回アクセス時はAPIからJWT取得
+      axios.get("/token").then((res) => {
+        const { token, uuid } = res.data;
+        setCookie("userJwt", token);
+        setMemberId(uuid);
+      });
+    }
+  }, []);
   const { roomState, socket, completedMemberIds } = useRoomSocket(
     roomId ?? "",
     memberId
@@ -28,7 +54,7 @@ const GuestRoom: React.FC = () => {
   const handleSend = () => {
     setIsSending(true);
     if (socket && roomId) {
-      socket.emit("complete", { memberId, roomId });
+      socket.emit("complete", { roomId });
     }
     setIsSending(false);
     setIsSent(true);
@@ -45,7 +71,7 @@ const GuestRoom: React.FC = () => {
     setIsSent(false);
     // 必要ならサーバーに取り消しイベント送信
     if (socket && roomId) {
-      socket.emit("cancelComplete", { memberId, roomId });
+      socket.emit("cancelComplete", { roomId });
     }
   };
 

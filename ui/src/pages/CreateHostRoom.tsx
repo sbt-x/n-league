@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import axios from "axios";
+import { getCookie } from "../utils/cookie";
 import { useNavigate } from "react-router-dom";
 
 const CreateHostRoom: React.FC = () => {
@@ -9,9 +10,12 @@ const CreateHostRoom: React.FC = () => {
 
   const handleCreateRoom = async () => {
     try {
-      const response = await axios.post("http://localhost:3000/rooms", {
-        name: roomName,
-      });
+      const token = getCookie("userJwt");
+      const response = await axios.post(
+        "http://localhost:3000/rooms",
+        { name: roomName },
+        { headers: token ? { Authorization: `Bearer ${token}` } : undefined }
+      );
       console.log("Room created:", response.data);
       // 部屋作成成功時にHostRoomページへ遷移（roomIdをURLに含める）
       navigate(`/host-room/${response.data.roomId}`);

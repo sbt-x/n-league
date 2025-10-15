@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
-import { setCookie } from "../utils/cookie";
+import { setCookie, getCookie } from "../utils/cookie";
 
 const GuestRoomEnter: React.FC = () => {
   const { roomId: paramRoomId } = useParams<{ roomId?: string }>();
@@ -12,10 +12,14 @@ const GuestRoomEnter: React.FC = () => {
 
   const handleJoinRoom = async () => {
     try {
+      const token = getCookie("userJwt");
       const response = await axios.post(
         `http://localhost:3000/rooms/${roomId}/join`,
         {
           name: userName,
+        },
+        {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         }
       );
       setError("");

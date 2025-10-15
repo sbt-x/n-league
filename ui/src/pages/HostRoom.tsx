@@ -1,12 +1,38 @@
 import React from "react";
 import { useRoomSocket } from "../hooks/useRoomSocket";
-import { getCookie } from "../utils/cookie";
+import { getCookie, setCookie } from "../utils/cookie";
+import axios from "axios";
+import { jwtDecode } from "jwt-decode";
 import { useParams } from "react-router-dom";
 import { ReadOnlyWhiteboard } from "../features/whiteboard/ReadOnlyWhiteboard";
 
 const HostRoom: React.FC = () => {
   const { roomId } = useParams<{ roomId: string }>();
-  const memberId = getCookie("memberId") ?? "";
+  // memberId: prefer server-issued memberId cookie, fallback to jwt.uuid
+  const [memberId, setMemberId] = React.useState<string>("");
+  React.useEffect(() => {
+    const mid = getCookie("memberId");
+    if (mid) {
+      setMemberId(mid);
+      return;
+    }
+    const jwt = getCookie("userJwt");
+    if (jwt) {
+      try {
+        const decoded: any = jwtDecode(jwt);
+        setMemberId(decoded.uuid);
+      } catch {
+        setMemberId("");
+      }
+    } else {
+      // 初回アクセス時はAPIからJWT取得
+      axios.get("http://localhost:3000/token").then((res) => {
+        const { token, uuid } = res.data;
+        setCookie("userJwt", token);
+        setMemberId(uuid);
+      });
+    }
+  }, []);
   const { roomState, completedMemberIds } = useRoomSocket(
     roomId ?? "",
     memberId

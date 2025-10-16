@@ -99,25 +99,19 @@ export class RoomsService {
     return { memberId, isHost: false };
   }
 
-  leaveRoom(roomId: string, memberId: string, token?: string) {
+  leaveRoom(roomId: string, token?: string) {
     const room = this.rooms[roomId];
     if (!room) throw new NotFoundException("Room not found");
-    // If token provided, verify that token's uuid matches the member being removed
-    if (token) {
-      try {
-        const payload: any = this.jwtService.verify(token);
-        const m = room.members.find((m: any) => m.id === memberId);
-        if (!m) throw new NotFoundException("Member not found");
-        if (m.uuid && payload?.uuid && m.uuid !== payload.uuid) {
-          throw new BadRequestException("Not authorized to remove this member");
-        }
-      } catch (e) {
-        if (e instanceof BadRequestException || e instanceof NotFoundException)
-          throw e;
-        throw new BadRequestException("Invalid token");
-      }
+    if (!token) throw new BadRequestException("Authorization token required");
+    let payload: any;
+    try {
+      payload = this.jwtService.verify(token);
+    } catch (e) {
+      throw new BadRequestException("Invalid token");
     }
-    const idx = room.members.findIndex((m: any) => m.id === memberId);
+    const uuid = payload?.uuid;
+    if (!uuid) throw new BadRequestException("Invalid token payload");
+    const idx = room.members.findIndex((m: any) => m.uuid === uuid);
     if (idx === -1) throw new NotFoundException("Member not found");
     const wasHost = room.members[idx].isHost;
     room.members.splice(idx, 1);
@@ -132,7 +126,7 @@ export class RoomsService {
   }
   kickMember(
     roomId: string,
-    dto: { hostId: string; memberId: string },
+    dto: { hostId: string; memberId?: string; memberUuid?: string },
     token?: string
   ) {
     const room = this.rooms[roomId];
@@ -159,10 +153,17 @@ export class RoomsService {
         throw e;
       throw new BadRequestException("Invalid token");
     }
-    const idx = room.members.findIndex((m: any) => m.id === dto.memberId);
+    // まず memberUuid でターゲットを特定し、できない場合は memberId を代わりに使用する
+    let idx = -1;
+    if (dto.memberUuid) {
+      idx = room.members.findIndex((m: any) => m.uuid === dto.memberUuid);
+    }
+    if (idx === -1 && dto.memberId) {
+      idx = room.members.findIndex((m: any) => m.id === dto.memberId);
+    }
     if (idx === -1) throw new NotFoundException("Member not found");
     const wasHost = room.members[idx].isHost;
-    room.members.splice(idx, 1);
+    const removedMember = room.members.splice(idx, 1)[0];
     // ホストが抜けた場合は自動で引き継ぎ
     if (wasHost && room.members.length > 0) {
       room.members[0].isHost = true;
@@ -170,6 +171,6 @@ export class RoomsService {
       room.hostName = room.members[0].name;
     }
     this.eventEmitter.emit("room.stateChanged", roomId);
-    return { success: true, kicked: dto.memberId };
+    return { success: true, kicked: removedMember.id };
   }
 }

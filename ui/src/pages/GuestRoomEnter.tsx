@@ -12,7 +12,13 @@ const GuestRoomEnter: React.FC = () => {
 
   const handleJoinRoom = async () => {
     try {
-      const token = getCookie("userJwt");
+      let token = getCookie("userJwt");
+      if (!token) {
+        // obtain a token before joining so server can associate uuid with member
+        const t = await axios.get(`${import.meta.env.VITE_API_URL}/token`);
+        token = t.data?.token;
+        if (token) setCookie("userJwt", token);
+      }
       const response = await axios.post(
         `${import.meta.env.VITE_API_URL}/rooms/${roomId}/join`,
         {

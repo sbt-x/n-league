@@ -8,30 +8,24 @@ import { ReadOnlyWhiteboard } from "../features/whiteboard/ReadOnlyWhiteboard";
 
 const HostRoom: React.FC = () => {
   const { roomId } = useParams<{ roomId: string }>();
-  // memberId: prefer server-issued memberId cookie, fallback to jwt.uuid
+  // userJwt cookie から memberId を取得。なければサーバーに新しいトークンをリクエスト
   const [memberId, setMemberId] = React.useState<string>("");
   React.useEffect(() => {
-    const mid = getCookie("memberId");
-    if (mid) {
-      setMemberId(mid);
-      return;
-    }
     const jwt = getCookie("userJwt");
     if (jwt) {
       try {
         const decoded: any = jwtDecode(jwt);
         setMemberId(decoded.uuid);
+        return;
       } catch {
-        setMemberId("");
+        // fall through to fetch a new token
       }
-    } else {
-      // 初回アクセス時はAPIからJWT取得
-      axios.get(`${import.meta.env.VITE_API_URL}/token`).then((res) => {
-        const { token, uuid } = res.data;
-        setCookie("userJwt", token);
-        setMemberId(uuid);
-      });
     }
+    axios.get(`${import.meta.env.VITE_API_URL}/token`).then((res) => {
+      const { token, uuid } = res.data;
+      setCookie("userJwt", token);
+      setMemberId(uuid);
+    });
   }, []);
   const { roomState, completedMemberIds } = useRoomSocket(
     roomId ?? "",
@@ -40,6 +34,21 @@ const HostRoom: React.FC = () => {
 
   // 人数取得
   const members = roomState ? roomState.members : [];
+
+  const handleKick = async (member: any) => {
+    try {
+      const token = getCookie("userJwt");
+      if (!token) throw new Error("No token");
+      await axios.post(
+        `${import.meta.env.VITE_API_URL}/rooms/${roomId}/kick`,
+        { memberUuid: member.uuid ?? member.id },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      // optimistic: nothing else required; roomState update will arrive via socket
+    } catch (e) {
+      console.error("Failed to kick member", e);
+    }
+  };
 
   return (
     <div className="w-full h-full p-4 flex flex-col gap-4">
@@ -61,27 +70,38 @@ const HostRoom: React.FC = () => {
           {/* ホストは表示しない。ゲスト分のReadOnlyWhiteboardのみ横並びで表示 */}
           {members
             .filter((m) => !m.isHost)
-            .map((member) => (
-              <div
-                key={member.id}
-                className="flex flex-col items-center w-72 max-w-full"
-              >
-                <div className="w-full text-sm mb-2 text-center font-medium select-none text-blue-600 font-bold">
-                  {member.name}
-                </div>
-                <div className="flex w-full h-full items-center justify-center">
-                  <div className="border w-56 h-56 aspect-square border-2 border-blue-400 shadow-lg bg-blue-50 flex items-center justify-center">
-                    <ReadOnlyWhiteboard
-                      mode={
-                        completedMemberIds.includes(member.id)
-                          ? "star"
-                          : "question"
-                      }
-                    />
+            .map((member) => {
+              const memberIdent = (member as any).uuid ?? member.id;
+              return (
+                <div
+                  key={member.id}
+                  className="flex flex-col items-center w-72 max-w-full"
+                >
+                  <div className="w-full text-sm mb-2 text-center font-medium select-none text-blue-600 font-bold">
+                    {member.name}
+                  </div>
+                  <div className="w-full flex justify-center mb-2">
+                    <button
+                      className="text-xs bg-red-500 text-white px-2 py-1 rounded"
+                      onClick={() => handleKick(member)}
+                    >
+                      キック
+                    </button>
+                  </div>
+                  <div className="flex w-full h-full items-center justify-center">
+                    <div className="border w-56 h-56 aspect-square border-2 border-blue-400 shadow-lg bg-blue-50 flex items-center justify-center">
+                      <ReadOnlyWhiteboard
+                        mode={
+                          completedMemberIds.includes(memberIdent)
+                            ? "star"
+                            : "question"
+                        }
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
         </div>
       </div>
     </div>

@@ -47,14 +47,10 @@ export class RoomsController {
   @Post(":roomId/leave")
   leaveRoom(
     @Param("roomId") roomId: string,
-    @Body("memberId") memberId: string,
     @Headers("authorization") auth?: string
   ) {
-    return this.roomsService.leaveRoom(
-      roomId,
-      memberId,
-      auth?.replace(/^Bearer\s+/i, "")
-    );
+    const token = auth?.replace(/^Bearer\s+/i, "");
+    return this.roomsService.leaveRoom(roomId, token);
   }
 
   @Post(":roomId/kick")

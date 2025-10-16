@@ -14,30 +14,24 @@ import { jwtDecode } from "jwt-decode";
 
 const GuestRoom: React.FC = () => {
   const { roomId } = useParams<{ roomId: string }>();
-  // memberId: prefer server-issued memberId cookie, fallback to jwt.uuid
   const [memberId, setMemberId] = useState<string>("");
   React.useEffect(() => {
-    const mid = getCookie("memberId");
-    if (mid) {
-      setMemberId(mid);
-      return;
-    }
     const jwt = getCookie("userJwt");
     if (jwt) {
       try {
         const decoded: any = jwtDecode(jwt);
         setMemberId(decoded.uuid);
+        return;
       } catch {
-        setMemberId("");
+        // 取得できなかった場合はトークンを再取得
       }
-    } else {
-      // 初回アクセス時はAPIからJWT取得
-      axios.get("/token").then((res) => {
-        const { token, uuid } = res.data;
-        setCookie("userJwt", token);
-        setMemberId(uuid);
-      });
     }
+    // 初回アクセスまたは不正な JWT の場合は API から JWT を取得
+    axios.get(`${import.meta.env.VITE_API_URL}/token`).then((res) => {
+      const { token, uuid } = res.data;
+      setCookie("userJwt", token);
+      setMemberId(uuid);
+    });
   }, []);
   const { roomState, socket, completedMemberIds } = useRoomSocket(
     roomId ?? "",
@@ -93,7 +87,9 @@ const GuestRoom: React.FC = () => {
       <div className="bg-white rounded-lg border border-gray-300 p-4 flex-1 min-h-0 overflow-hidden flex items-center justify-center">
         <div className="flex gap-6 justify-center items-center">
           {members.map((member) => {
-            const isMe = member.id === meId;
+            // identify member by uuid when available, fallback to id
+            const memberIdent = (member as any).uuid ?? member.id;
+            const isMe = memberIdent === meId;
             return (
               <div
                 key={member.id}
@@ -103,13 +99,19 @@ const GuestRoom: React.FC = () => {
                   className={`w-full text-sm mb-2 text-center font-medium select-none ${
                     isMe
                       ? "text-blue-600 font-bold"
-                      : completedMemberIds.includes(member.id)
+                      : completedMemberIds.includes(
+                            (member as any).uuid ?? member.id
+                          )
                         ? "text-green-600 font-bold text-xs"
                         : "text-gray-600 text-xs"
                   }`}
                 >
                   {member.name} {isMe && "(あなた)"}{" "}
-                  {!isMe && completedMemberIds.includes(member.id) && "✓"}
+                  {!isMe &&
+                    completedMemberIds.includes(
+                      (member as any).uuid ?? member.id
+                    ) &&
+                    "✓"}
                 </div>
                 <div className={`${isMe ? "flex" : "w-full h-full"}`}>
                   <div
@@ -117,7 +119,9 @@ const GuestRoom: React.FC = () => {
                       isMe
                         ? "w-56 h-56 aspect-square border-2 border-blue-400 shadow-lg bg-blue-50"
                         : `w-full h-full border-2 ${
-                            completedMemberIds.includes(member.id)
+                            completedMemberIds.includes(
+                              (member as any).uuid ?? member.id
+                            )
                               ? "border-green-400 bg-green-50"
                               : "border-gray-200 bg-white"
                           }`
@@ -133,7 +137,9 @@ const GuestRoom: React.FC = () => {
                     ) : (
                       <ReadOnlyWhiteboard
                         mode={
-                          completedMemberIds.includes(member.id)
+                          completedMemberIds.includes(
+                            (member as any).uuid ?? member.id
+                          )
                             ? "star"
                             : "question"
                         }

@@ -8,6 +8,7 @@ import {
 import { Server, Socket } from "socket.io";
 import { RoomsService } from "./rooms.service";
 import { OnEvent } from "@nestjs/event-emitter";
+import { JwtService } from "@nestjs/jwt";
 
 @WebSocketGateway({
   namespace: "/rooms",
@@ -21,33 +22,41 @@ export class RoomsGateway {
   // プレイヤーが完了ボタンを押したとき
   @SubscribeMessage("complete")
   handleComplete(
-    @MessageBody() data: { roomId: string; memberId: string },
+    @MessageBody() data: { roomId: string },
     @ConnectedSocket() client: Socket
   ) {
-    // 完了したmemberIdを全員に通知
-    this.server.to(data.roomId).emit("memberCompleted", data.memberId);
+    // サーバで検証済みの uuid を利用して通知
+    const uuid = client.data?.uuid as string | undefined;
+    if (!uuid) return;
+    this.server.to(data.roomId).emit("memberCompleted", uuid);
   }
 
   // プレイヤーが送信取り消しボタンを押したとき
   @SubscribeMessage("cancelComplete")
   handleCancelComplete(
-    @MessageBody() data: { roomId: string; memberId: string },
+    @MessageBody() data: { roomId: string },
     @ConnectedSocket() client: Socket
   ) {
-    // 取り消したmemberIdを全員に通知
-    this.server.to(data.roomId).emit("memberCancelled", data.memberId);
+    const uuid = client.data?.uuid as string | undefined;
+    if (!uuid) return;
+    this.server.to(data.roomId).emit("memberCancelled", uuid);
   }
   @WebSocketServer()
   server: Server;
 
-  constructor(private readonly roomsService: RoomsService) {}
+  constructor(
+    private readonly roomsService: RoomsService,
+    private readonly jwtService: JwtService
+  ) {}
 
   // クライアントが部屋にjoin
   @SubscribeMessage("join")
   handleJoin(
-    @MessageBody() data: { roomId: string; memberId: string },
+    @MessageBody() data: { roomId: string },
     @ConnectedSocket() client: Socket
   ) {
+    const uuid = client.data?.uuid as string | undefined;
+    if (!uuid) return;
     client.join(data.roomId);
     this.emitRoomState(data.roomId);
   }
@@ -55,11 +64,34 @@ export class RoomsGateway {
   // クライアントが部屋からleave
   @SubscribeMessage("leave")
   handleLeave(
-    @MessageBody() data: { roomId: string; memberId: string },
+    @MessageBody() data: { roomId: string },
     @ConnectedSocket() client: Socket
   ) {
+    const uuid = client.data?.uuid as string | undefined;
+    if (!uuid) return;
     client.leave(data.roomId);
     this.emitRoomState(data.roomId);
+  }
+
+  // 接続時に JWT を検証して client.data.uuid に保存する
+  async handleConnection(client: Socket) {
+    try {
+      const token = (client.handshake?.auth as any)?.token as
+        | string
+        | undefined;
+      if (!token) {
+        client.disconnect(true);
+        return;
+      }
+      const payload: any = this.jwtService.verify(token);
+      if (!payload?.uuid) {
+        client.disconnect(true);
+        return;
+      }
+      client.data.uuid = payload.uuid;
+    } catch (e) {
+      client.disconnect(true);
+    }
   }
 
   // 部屋状態を全員に通知

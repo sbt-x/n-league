@@ -1,4 +1,5 @@
 export class KickRoomDto {
   hostId: string;
-  memberId: string;
+  memberId?: string;
+  memberUuid?: string;
 }

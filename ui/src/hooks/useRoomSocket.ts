@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { io, Socket } from "socket.io-client";
+import { getCookie } from "../utils/cookie";
 
 export interface RoomState {
   id: string;
@@ -14,9 +15,13 @@ export function useRoomSocket(roomId: string, memberId: string) {
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
-    const socket = io("http://localhost:3000/rooms");
+    const token = getCookie("userJwt");
+    const socket = io(`${import.meta.env.VITE_API_URL}/rooms`, {
+      auth: { token },
+    });
     socketRef.current = socket;
-    socket.emit("join", { roomId, memberId });
+    // send only roomId; server uses validated uuid from handshake
+    socket.emit("join", { roomId });
     socket.on("roomState", (state: RoomState) => {
       setRoomState({ ...state, meId: memberId });
     });
@@ -31,7 +36,7 @@ export function useRoomSocket(roomId: string, memberId: string) {
       setCompletedMemberIds((prev) => prev.filter((id) => id !== cancelledId));
     });
     return () => {
-      socket.emit("leave", { roomId, memberId });
+      socket.emit("leave", { roomId });
       socket.disconnect();
     };
   }, [roomId, memberId]);

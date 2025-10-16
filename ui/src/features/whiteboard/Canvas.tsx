@@ -337,3 +337,5 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
     );
   }
 );
+
+Canvas.displayName = "Canvas";

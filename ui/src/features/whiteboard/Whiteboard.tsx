@@ -54,3 +54,5 @@ export const Whiteboard = forwardRef<WhiteboardHandle, WhiteboardProps>(
     );
   }
 );
+
+Whiteboard.displayName = "Whiteboard";

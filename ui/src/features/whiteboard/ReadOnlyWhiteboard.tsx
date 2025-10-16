@@ -18,3 +18,5 @@ export const ReadOnlyWhiteboard: React.FC<ReadOnlyWhiteboardProps> = ({
     </div>
   );
 };
+
+ReadOnlyWhiteboard.displayName = "ReadOnlyWhiteboard";

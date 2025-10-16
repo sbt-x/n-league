@@ -4,6 +4,7 @@ import GuestRoom from "./pages/GuestRoom";
 import GuestRoomEnter from "./pages/GuestRoomEnter";
 import CreateHostRoom from "./pages/CreateHostRoom";
 import HostRoom from "./pages/HostRoom";
+import NotFound from "./pages/NotFound";
 
 function App() {
   return (
@@ -27,6 +28,7 @@ function App() {
             />
             <Route path="/create-host-room" element={<CreateHostRoom />} />
             <Route path="/host-room/:roomId" element={<HostRoom />} />
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </main>
 

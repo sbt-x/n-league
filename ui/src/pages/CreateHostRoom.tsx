@@ -12,7 +12,7 @@ const CreateHostRoom: React.FC = () => {
     try {
       const token = getCookie("userJwt");
       const response = await axios.post(
-        "http://localhost:3000/rooms",
+        `${import.meta.env.VITE_API_URL}/rooms`,
         { name: roomName },
         { headers: token ? { Authorization: `Bearer ${token}` } : undefined }
       );

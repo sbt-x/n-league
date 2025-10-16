@@ -26,7 +26,7 @@ const HostRoom: React.FC = () => {
       }
     } else {
       // 初回アクセス時はAPIからJWT取得
-      axios.get("http://localhost:3000/token").then((res) => {
+      axios.get(`${import.meta.env.VITE_API_URL}/token`).then((res) => {
         const { token, uuid } = res.data;
         setCookie("userJwt", token);
         setMemberId(uuid);

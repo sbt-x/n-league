@@ -14,7 +14,7 @@ const GuestRoomEnter: React.FC = () => {
     try {
       const token = getCookie("userJwt");
       const response = await axios.post(
-        `http://localhost:3000/rooms/${roomId}/join`,
+        `${import.meta.env.VITE_API_URL}/rooms/${roomId}/join`,
         {
           name: userName,
         },

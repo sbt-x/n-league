@@ -16,7 +16,7 @@ export function useRoomSocket(roomId: string, memberId: string) {
 
   useEffect(() => {
     const token = getCookie("userJwt");
-    const socket = io("http://localhost:3000/rooms", {
+    const socket = io(import.meta.env.VITE_API_URL, {
       auth: { token },
     });
     socketRef.current = socket;

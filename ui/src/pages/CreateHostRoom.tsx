@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import axios from "axios";
-import { getCookie } from "../utils/cookie";
+import { getCookie, setCookie } from "../utils/cookie";
 import { useNavigate } from "react-router-dom";
 
 const CreateHostRoom: React.FC = () => {
@@ -10,7 +10,12 @@ const CreateHostRoom: React.FC = () => {
 
   const handleCreateRoom = async () => {
     try {
-      const token = getCookie("userJwt");
+      let token = getCookie("userJwt");
+      if (!token) {
+        const t = await axios.get(`${import.meta.env.VITE_API_URL}/token`);
+        token = t.data?.token;
+        if (token) setCookie("userJwt", token);
+      }
       const response = await axios.post(
         `${import.meta.env.VITE_API_URL}/rooms`,
         { name: roomName },

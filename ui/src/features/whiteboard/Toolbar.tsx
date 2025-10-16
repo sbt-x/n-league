@@ -1,7 +1,7 @@
 import React from "react";
-import type { Tool, Color, Width } from "./types/whiteboard.ts";
+import type { Tool, Color, Width } from "./types/whiteboard";
 import { FaPen, FaEraser } from "react-icons/fa";
-import { IconButton } from "../../components/IconButton.tsx";
+import { IconButton } from "../../components/IconButton";
 
 interface ToolbarProps {
   tool: Tool;

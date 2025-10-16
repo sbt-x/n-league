@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Tool } from "../types/whiteboard.ts";
+import type { Tool } from "../types/whiteboard";
 
 export function useTool() {
   const [tool, setTool] = useState<Tool>("pen");

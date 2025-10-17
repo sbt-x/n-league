@@ -17,14 +17,19 @@ export class RoomsService {
     private readonly eventEmitter: EventEmitter2,
     private readonly jwtService: JwtService
   ) {}
+
   /**
    * 初回アクセス時にUUIDを生成し、JWTトークンとして返す
+   *
+   * @return JWTトークン
    */
-  issueUserToken(): { token: string; uuid: string } {
+  issueUserToken(): string {
+    const TTL_SECONDS = 30 * 24 * 60 * 60; // 30 days
+
     const uuid = uuidv4();
-    const payload = { uuid };
-    const token = this.jwtService.sign(payload, { expiresIn: "30d" });
-    return { token, uuid };
+    const token = this.jwtService.sign({ uuid }, { expiresIn: TTL_SECONDS });
+
+    return token;
   }
 
   /**

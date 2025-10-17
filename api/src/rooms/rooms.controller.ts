@@ -6,23 +6,29 @@ import {
   Get,
   Headers,
   UnauthorizedException,
+  UseGuards,
+  Req,
 } from "@nestjs/common";
 import { KickRoomDto } from "./dto/kick-room.dto";
 import { CreateRoomDto } from "./dto/create-room.dto";
 import { JoinRoomDto } from "./dto/join-room.dto";
 import { RoomsService } from "./rooms.service";
+import { TokenGuard } from "../common/guards/token.guard";
+import { Request } from "express";
 
 @Controller("rooms")
 export class RoomsController {
   constructor(private readonly roomsService: RoomsService) {}
 
   @Post()
+  @UseGuards(TokenGuard)
   createRoom(
     @Body() dto: CreateRoomDto,
-    @Headers("authorization") auth?: string
+    @Req() req: Request & { uuid?: string }
   ) {
-    const token = auth?.replace(/^Bearer\s+/i, "");
-    if (!token) throw new UnauthorizedException("Authorization token required");
+    const token = req.headers["authorization"]?.replace(/^Bearer\s+/i, "") as
+      | string
+      | undefined;
     return this.roomsService.createRoom(dto, token);
   }
 
@@ -45,22 +51,27 @@ export class RoomsController {
   }
 
   @Post(":roomId/leave")
+  @UseGuards(TokenGuard)
   leaveRoom(
     @Param("roomId") roomId: string,
-    @Headers("authorization") auth?: string
+    @Req() req: Request & { uuid?: string }
   ) {
-    const token = auth?.replace(/^Bearer\s+/i, "");
+    const token = req.headers["authorization"]?.replace(/^Bearer\s+/i, "") as
+      | string
+      | undefined;
     return this.roomsService.leaveRoom(roomId, token);
   }
 
   @Post(":roomId/kick")
+  @UseGuards(TokenGuard)
   kickMember(
     @Param("roomId") roomId: string,
     @Body() dto: KickRoomDto,
-    @Headers("authorization") auth?: string
+    @Req() req: Request & { uuid?: string }
   ) {
-    const token = auth?.replace(/^Bearer\s+/i, "");
-    if (!token) throw new UnauthorizedException("Authorization token required");
+    const token = req.headers["authorization"]?.replace(/^Bearer\s+/i, "") as
+      | string
+      | undefined;
     return this.roomsService.kickMember(roomId, dto, token);
   }
 }

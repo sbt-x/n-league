@@ -8,7 +8,7 @@ import {
 import { Server, Socket } from "socket.io";
 import { RoomsService } from "./rooms.service";
 import { OnEvent } from "@nestjs/event-emitter";
-import { JwtService } from "@nestjs/jwt";
+import { TokenService } from "../token/token.service";
 
 @WebSocketGateway({
   namespace: "/rooms",
@@ -46,7 +46,7 @@ export class RoomsGateway {
 
   constructor(
     private readonly roomsService: RoomsService,
-    private readonly jwtService: JwtService
+    private readonly tokenService: TokenService
   ) {}
 
   // クライアントが部屋にjoin
@@ -83,12 +83,12 @@ export class RoomsGateway {
         client.disconnect(true);
         return;
       }
-      const payload: any = this.jwtService.verify(token);
-      if (!payload?.uuid) {
+      const uuid = this.tokenService.verifyUserToken(token);
+      if (!uuid) {
         client.disconnect(true);
         return;
       }
-      client.data.uuid = payload.uuid;
+      client.data.uuid = uuid;
     } catch (e) {
       client.disconnect(true);
     }

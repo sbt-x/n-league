@@ -52,10 +52,16 @@ export class TokenService {
 
   /**
    * 指定された member オブジェクトが token の所有者かどうかを判定
+   *
+   * @param token JWTトークン
+   * @param member メンバーオブジェクト
+   * @return 所有者であれば true、そうでなければ false
    */
-  isTokenOwnerOfMember(token: string, member: any): boolean {
+  isTokenOwnerOfMember(token: string, member: { uuid: string }): boolean {
     const uuid = this.verifyUserToken(token);
-    if (!uuid) return false;
-    return member?.uuid === uuid;
+    if (!uuid) {
+      return false;
+    }
+    return member.uuid === uuid;
   }
 }

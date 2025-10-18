@@ -2,6 +2,12 @@ import { Injectable } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import { v4 as uuidv4 } from "uuid";
 
+type JwtPayload = {
+  uuid: string;
+  iat: number;
+  exp: number;
+};
+
 @Injectable()
 export class TokenService {
   constructor(private readonly jwtService: JwtService) {}
@@ -22,11 +28,14 @@ export class TokenService {
 
   /**
    * トークンを検証し、payload.uuid を返す（無効なら null）
+   *
+   * @param token JWTトークン
+   * @return UUID または null
    */
   verifyUserToken(token: string): string | null {
     try {
-      const payload: any = this.jwtService.verify(token);
-      return payload?.uuid ?? null;
+      const payload: JwtPayload = this.jwtService.verify(token);
+      return payload.uuid ?? null;
     } catch (e) {
       return null;
     }

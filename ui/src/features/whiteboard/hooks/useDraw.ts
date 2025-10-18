@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import type { Point } from "../types/whiteboard";
-import type { Stroke, Tool } from "../types/whiteboard.ts";
+import type { Stroke, Tool } from "../types/whiteboard";
 
 interface UseDrawOptions {
   tool: Tool;

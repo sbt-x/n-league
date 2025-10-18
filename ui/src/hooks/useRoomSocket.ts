@@ -1,11 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { io, Socket } from "socket.io-client";
 import { getCookie } from "../utils/cookie";
+import { jwtDecode } from "jwt-decode";
 
 export interface RoomState {
-  id: string;
-  name: string;
-  members: Array<{ id: string; name: string; isHost: boolean }>;
+  roomId: string;
+  hostId: string;
+  hostName: string;
+  maxPlayers?: number;
+  members: Array<{ id: string; name: string; isHost: boolean; uuid?: string }>;
+  isFull?: boolean;
   meId?: string;
 }
 
@@ -16,6 +20,20 @@ export function useRoomSocket(roomId: string, memberId: string) {
 
   useEffect(() => {
     const token = getCookie("userJwt");
+    // guard: don't connect if there's no token or it's expired
+    if (!token) return;
+    try {
+      const decoded: any = jwtDecode(token);
+      if (decoded?.exp && Date.now() >= decoded.exp * 1000) {
+        // expired
+        console.info("userJwt is expired; not connecting socket");
+        return;
+      }
+    } catch (e) {
+      console.info("failed to decode token; not connecting socket", e);
+      return;
+    }
+
     const socket = io(`${import.meta.env.VITE_API_URL}/rooms`, {
       auth: { token },
     });

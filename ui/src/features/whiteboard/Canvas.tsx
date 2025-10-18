@@ -5,9 +5,9 @@ import React, {
   forwardRef,
   useImperativeHandle,
 } from "react";
-import { useDraw } from "./hooks/useDraw.ts";
-import type { Point, Stroke, Tool } from "./types/whiteboard.ts";
-import { assertNever } from "../../utils/types.ts";
+import { useDraw } from "./hooks/useDraw";
+import type { Point, Stroke, Tool } from "./types/whiteboard";
+import { assertNever } from "../../utils/types";
 
 type CanvasProps = {
   tool: Tool;
@@ -337,3 +337,5 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
     );
   }
 );
+
+Canvas.displayName = "Canvas";

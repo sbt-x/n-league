@@ -28,9 +28,14 @@ const GuestRoom: React.FC = () => {
     }
     // 初回アクセスまたは不正な JWT の場合は API から JWT を取得
     axios.get(`${import.meta.env.VITE_API_URL}/token`).then((res) => {
-      const { token, uuid } = res.data;
+      const token = res.data as string;
       setCookie("userJwt", token);
-      setMemberId(uuid);
+      try {
+        const decoded: any = jwtDecode(token);
+        if (decoded?.uuid) setMemberId(decoded.uuid);
+      } catch {
+        // ignore decode error
+      }
     });
   }, []);
   const { roomState, socket, completedMemberIds } = useRoomSocket(

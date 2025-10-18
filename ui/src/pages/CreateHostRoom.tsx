@@ -13,7 +13,7 @@ const CreateHostRoom: React.FC = () => {
       let token = getCookie("userJwt");
       if (!token) {
         const t = await axios.get(`${import.meta.env.VITE_API_URL}/token`);
-        token = t.data?.token;
+        token = t.data as string;
         if (token) setCookie("userJwt", token);
       }
       const response = await axios.post(

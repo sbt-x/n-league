@@ -30,3 +30,5 @@ export const IconButton: React.FC<ButtonProps> = ({
     </button>
   );
 };
+
+IconButton.displayName = "IconButton";

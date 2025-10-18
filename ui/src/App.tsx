@@ -4,20 +4,22 @@ import GuestRoom from "./pages/GuestRoom";
 import GuestRoomEnter from "./pages/GuestRoomEnter";
 import CreateHostRoom from "./pages/CreateHostRoom";
 import HostRoom from "./pages/HostRoom";
+import NotFound from "./pages/NotFound";
 
 function App() {
   return (
     <BrowserRouter>
-      <div className="h-screen flex flex-col">
-        {/* Header: 固定 */}
-        <header className="bg-blue-600 text-white p-4 shadow fixed top-0 left-0 w-full z-10">
+      {/* Grid layout: header (fixed height) / content / footer (fixed height) */}
+      <div className="min-h-screen grid grid-rows-[4rem_1fr_3rem]">
+        {/* Header */}
+        <header className="bg-blue-600 text-white shadow flex items-center px-4 h-16">
           <div className="container mx-auto text-2xl font-semibold">
             Example Page
           </div>
         </header>
 
-        {/* Main Routing: ヘッダー・フッター分の高さを除外 */}
-        <main className="flex-1 bg-gray-100 pt-20 pb-8 h-full">
+        {/* Main Routing: header/footer 行を除いた自動伸長領域 */}
+        <main className="bg-gray-100 overflow-auto">
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/rooms/guest-room/:roomId" element={<GuestRoom />} />
@@ -27,11 +29,12 @@ function App() {
             />
             <Route path="/create-host-room" element={<CreateHostRoom />} />
             <Route path="/host-room/:roomId" element={<HostRoom />} />
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </main>
 
-        {/* Footer: 固定 */}
-        <footer className="bg-blue-600 text-white text-center py-2 fixed bottom-0 left-0 w-full z-10">
+        {/* Footer */}
+        <footer className="bg-blue-600 text-white flex items-center justify-center h-12">
           &copy; All rights reserved.
         </footer>
       </div>

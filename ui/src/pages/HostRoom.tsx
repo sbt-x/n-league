@@ -6,49 +6,89 @@ import { jwtDecode } from "jwt-decode";
 import { useParams } from "react-router-dom";
 import { ReadOnlyWhiteboard } from "../features/whiteboard/ReadOnlyWhiteboard";
 
+type Member = { id: string; name?: string; isHost?: boolean; uuid?: string };
+type DecodedJwt = { uuid?: string; exp?: number } & Record<string, any>;
+
 const HostRoom: React.FC = () => {
   const { roomId } = useParams<{ roomId: string }>();
   // userJwt cookie から memberId を取得。なければサーバーに新しいトークンをリクエスト
   const [memberId, setMemberId] = React.useState<string>("");
+
   React.useEffect(() => {
-    const jwt = getCookie("userJwt");
-    if (jwt) {
+    async function initJwt() {
+      const jwt = getCookie("userJwt");
+      if (jwt) {
+        // CookieにJWTが存在する場合はデコードしてmemberIdを取得
+        try {
+          const decoded = jwtDecode(jwt) as DecodedJwt;
+          const uuid = decoded?.uuid;
+          const exp = decoded?.exp;
+          // exp は JWT 仕様で epoch seconds
+          if (exp && Date.now() >= exp * 1000) {
+            console.info("JWT は期限切れです。新しいトークンを取得します。");
+          } else if (uuid) {
+            setMemberId(uuid);
+            return;
+          }
+        } catch {
+          // デコードに失敗した場合はWarningを出力してトークンを再取得
+          console.warn(
+            "JWTのデコードに失敗しました。新しいトークンを取得します。"
+          );
+        }
+      }
       try {
-        const decoded: any = jwtDecode(jwt);
-        setMemberId(decoded.uuid);
-        return;
-      } catch {
-        // fall through to fetch a new token
+        // 初回アクセスまたは不正な JWT の場合は API から JWT を取得
+        const res = await axios.get(`${import.meta.env.VITE_API_URL}/token`);
+        const token = res.data as string;
+        if (token) {
+          setCookie("userJwt", token);
+          try {
+            const decoded = jwtDecode(token) as DecodedJwt;
+            const uuidFromToken = decoded?.uuid;
+            const expFromToken = decoded?.exp;
+            if (uuidFromToken) setMemberId(uuidFromToken);
+            if (expFromToken && Date.now() >= expFromToken * 1000) {
+              console.warn("サーバーから受け取ったトークンが期限切れです");
+            }
+          } catch {
+            // decode に失敗しても他の処理には影響しない
+          }
+        }
+      } catch (error) {
+        console.error("トークンの取得に失敗しました:", error);
       }
     }
-    axios.get(`${import.meta.env.VITE_API_URL}/token`).then((res) => {
-      const { token, uuid } = res.data;
-      setCookie("userJwt", token);
-      setMemberId(uuid);
-    });
+    initJwt();
   }, []);
+
   const { roomState, completedMemberIds } = useRoomSocket(
     roomId ?? "",
     memberId
   );
 
-  // 人数取得
+  // Hostを含む全メンバーリスト
   const members = roomState ? roomState.members : [];
 
-  const handleKick = async (member: any) => {
-    try {
+  /**
+   * メンバーをキックする
+   *
+   * @param member キックするメンバー情報
+   */
+  const handleKick = React.useCallback(
+    async (member: Member) => {
+      if (!roomId || !roomState?.hostId) return;
       const token = getCookie("userJwt");
-      if (!token) throw new Error("No token");
+      if (!token) return;
+
       await axios.post(
         `${import.meta.env.VITE_API_URL}/rooms/${roomId}/kick`,
-        { memberUuid: member.uuid ?? member.id },
+        { hostId: roomState.hostId, memberUuid: member.uuid },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      // optimistic: nothing else required; roomState update will arrive via socket
-    } catch (e) {
-      console.error("Failed to kick member", e);
-    }
-  };
+    },
+    [roomId, roomState?.hostId]
+  );
 
   return (
     <div className="w-full h-full p-4 flex flex-col gap-4">

@@ -6,37 +6,22 @@ import {
 import { CreateRoomDto } from "./dto/create-room.dto";
 import { JoinRoomDto } from "./dto/join-room.dto";
 import { nanoid } from "nanoid";
-import { v4 as uuidv4 } from "uuid";
-import { JwtService } from "@nestjs/jwt";
 import { EventEmitter2 } from "@nestjs/event-emitter";
+import { TokenService } from "../token/token.service";
 
 @Injectable()
 export class RoomsService {
   private rooms: Record<string, any> = {};
   constructor(
     private readonly eventEmitter: EventEmitter2,
-    private readonly jwtService: JwtService
+    private readonly tokenService: TokenService
   ) {}
-  /**
-   * 初回アクセス時にUUIDを生成し、JWTトークンとして返す
-   */
-  issueUserToken(): { token: string; uuid: string } {
-    const uuid = uuidv4();
-    const payload = { uuid };
-    const token = this.jwtService.sign(payload, { expiresIn: "30d" });
-    return { token, uuid };
-  }
 
   /**
    * JWTトークンを検証し、UUIDを取得
    */
   verifyUserToken(token: string): string | null {
-    try {
-      const payload = this.jwtService.verify(token);
-      return payload.uuid;
-    } catch (e) {
-      return null;
-    }
+    return this.tokenService.verifyUserToken(token);
   }
 
   createRoom(dto: CreateRoomDto, token?: string) {
@@ -45,12 +30,7 @@ export class RoomsService {
     // attach uuid to host if token provided and valid
     let hostUuid: string | undefined = undefined;
     if (token) {
-      try {
-        const payload: any = this.jwtService.verify(token);
-        hostUuid = payload?.uuid;
-      } catch (e) {
-        hostUuid = undefined;
-      }
+      hostUuid = this.tokenService.verifyUserToken(token) ?? undefined;
     }
     const hostMember: any = { id: hostId, name: dto.hostName, isHost: true };
     if (hostUuid) hostMember.uuid = hostUuid;
@@ -87,12 +67,8 @@ export class RoomsService {
     const memberId = nanoid(12);
     const member: any = { id: memberId, name: dto.name, isHost: false };
     if (token) {
-      try {
-        const payload: any = this.jwtService.verify(token);
-        if (payload?.uuid) member.uuid = payload.uuid;
-      } catch (e) {
-        // ignore invalid token
-      }
+      const uuid = this.tokenService.verifyUserToken(token);
+      if (uuid) member.uuid = uuid;
     }
     room.members.push(member);
     this.eventEmitter.emit("room.stateChanged", roomId);
@@ -103,14 +79,13 @@ export class RoomsService {
     const room = this.rooms[roomId];
     if (!room) throw new NotFoundException("Room not found");
     if (!token) throw new BadRequestException("Authorization token required");
-    let payload: any;
+    let uuid: string | null = null;
     try {
-      payload = this.jwtService.verify(token);
+      uuid = this.tokenService.verifyUserToken(token);
     } catch (e) {
-      throw new BadRequestException("Invalid token");
+      // verifyUserToken returns null on invalid; keep behavior
     }
-    const uuid = payload?.uuid;
-    if (!uuid) throw new BadRequestException("Invalid token payload");
+    if (!uuid) throw new BadRequestException("Invalid token");
     const idx = room.members.findIndex((m: any) => m.uuid === uuid);
     if (idx === -1) throw new NotFoundException("Member not found");
     const wasHost = room.members[idx].isHost;
@@ -134,12 +109,11 @@ export class RoomsService {
     // verify caller is host: token is required and must match host's uuid if host has uuid
     if (!token) throw new BadRequestException("Authorization token required");
     try {
-      const payload: any = this.jwtService.verify(token);
       const hostMember = room.members.find((m: any) => m.id === room.hostId);
       if (!hostMember) throw new NotFoundException("Host not found");
       // if host has uuid, require token.uuid to match; otherwise disallow kicking without host uuid
       if (hostMember.uuid) {
-        if (!payload?.uuid || payload.uuid !== hostMember.uuid) {
+        if (!this.tokenService.isTokenOwnerOfMember(token, hostMember)) {
           throw new BadRequestException("Only host can kick");
         }
       } else {

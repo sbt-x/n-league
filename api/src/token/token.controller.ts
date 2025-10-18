@@ -1,15 +1,15 @@
 import { Controller, Get } from "@nestjs/common";
-import { RoomsService } from "../rooms/rooms.service";
+import { TokenService } from "./token.service";
 
 @Controller("token")
 export class TokenController {
-  constructor(private readonly roomsService: RoomsService) {}
+  constructor(private readonly tokenService: TokenService) {}
 
   /**
    * JWT発行API: GET /token
    */
   @Get()
   issueToken() {
-    return this.roomsService.issueUserToken();
+    return this.tokenService.issueUserToken();
   }
 }

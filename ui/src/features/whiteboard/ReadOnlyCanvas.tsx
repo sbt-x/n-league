@@ -84,3 +84,5 @@ export const ReadOnlyCanvas: React.FC<ReadOnlyCanvasProps> = ({
     </div>
   );
 };
+
+ReadOnlyCanvas.displayName = "ReadOnlyCanvas";

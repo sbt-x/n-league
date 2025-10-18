@@ -1,7 +1,7 @@
 import React, { useImperativeHandle, forwardRef } from "react";
-import { Toolbar } from "./Toolbar.tsx";
-import { Canvas } from "./Canvas.tsx";
-import { useTool } from "./hooks/useTool.ts";
+import { Toolbar } from "./Toolbar";
+import { Canvas } from "./Canvas";
+import { useTool } from "./hooks/useTool";
 
 export type WhiteboardProps = {
   showToolbar?: boolean;
@@ -54,3 +54,5 @@ export const Whiteboard = forwardRef<WhiteboardHandle, WhiteboardProps>(
     );
   }
 );
+
+Whiteboard.displayName = "Whiteboard";

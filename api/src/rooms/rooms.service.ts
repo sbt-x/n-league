@@ -32,13 +32,13 @@ export class RoomsService {
     if (token) {
       hostUuid = this.tokenService.verifyUserToken(token) ?? undefined;
     }
-    const hostMember: any = { id: hostId, name: dto.hostName, isHost: true };
+    const hostMember: any = { id: hostId, name: dto.name, isHost: true };
     if (hostUuid) hostMember.uuid = hostUuid;
     this.rooms[roomId] = {
       roomId,
       hostId,
-      hostName: dto.hostName,
-      maxPlayers: dto.maxPlayers,
+      roomName: dto.name,
+      maxPlayers: dto.maxPlayers ?? 6,
       members: [hostMember],
     };
     const result = {

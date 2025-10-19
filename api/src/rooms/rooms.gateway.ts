@@ -19,7 +19,13 @@ import { TokenService } from "../token/token.service";
   },
 })
 export class RoomsGateway {
-  // プレイヤーが完了ボタンを押したとき
+  /**
+   * プレイヤーが描画送信ボタンを押したとき
+   *
+   * @param data
+   * @param client
+   * @returns
+   */
   @SubscribeMessage("complete")
   handleComplete(
     @MessageBody() data: { roomId: string },
@@ -31,7 +37,13 @@ export class RoomsGateway {
     this.server.to(data.roomId).emit("memberCompleted", uuid);
   }
 
-  // プレイヤーが送信取り消しボタンを押したとき
+  /**
+   * プレイヤーが描画送信キャンセルボタンを押したとき
+   *
+   * @param data
+   * @param client
+   * @returns
+   */
   @SubscribeMessage("cancelComplete")
   handleCancelComplete(
     @MessageBody() data: { roomId: string },
@@ -49,7 +61,13 @@ export class RoomsGateway {
     private readonly tokenService: TokenService
   ) {}
 
-  // クライアントが部屋にjoin
+  /**
+   * クライアントが入室したとき
+   *
+   * @param data
+   * @param client
+   * @returns
+   */
   @SubscribeMessage("join")
   handleJoin(
     @MessageBody() data: { roomId: string },
@@ -61,7 +79,13 @@ export class RoomsGateway {
     this.emitRoomState(data.roomId);
   }
 
-  // クライアントが部屋からleave
+  /**
+   * クライアントが退室したとき
+   *
+   * @param data
+   * @param client
+   * @returns
+   */
   @SubscribeMessage("leave")
   handleLeave(
     @MessageBody() data: { roomId: string },
@@ -70,10 +94,35 @@ export class RoomsGateway {
     const uuid = client.data?.uuid as string | undefined;
     if (!uuid) return;
     client.leave(data.roomId);
+    const token = (client.handshake?.auth as any)?.token as string | undefined;
+    // persist leave to DB
+    this.roomsService.leaveRoom(data.roomId, token).catch(() => {});
     this.emitRoomState(data.roomId);
   }
 
-  // 接続時に JWT を検証して client.data.uuid に保存する
+  async handleDisconnect(client: Socket) {
+    // when a socket disconnects, attempt to remove the member from any rooms
+    const uuid = client.data?.uuid as string | undefined;
+    if (!uuid) return;
+    // try to extract token from handshake if available to call leaveRoom
+    const token = (client.handshake?.auth as any)?.token as string | undefined;
+    // iterate rooms the socket was part of and call leaveRoom to persist
+    const rooms = Array.from(client.rooms).filter((r) => r !== client.id);
+    for (const roomId of rooms) {
+      try {
+        await this.roomsService.leaveRoom(roomId, token);
+      } catch (e) {
+        // ignore errors for now
+      }
+    }
+  }
+
+  /**
+   * 接続時に JWT を検証して client.data.uuid に保存する
+   *
+   * @param client
+   * @returns
+   */
   async handleConnection(client: Socket) {
     try {
       const token = (client.handshake?.auth as any)?.token as
@@ -94,12 +143,27 @@ export class RoomsGateway {
     }
   }
 
-  // 部屋状態を全員に通知
-  emitRoomState(roomId: string) {
-    const room = this.roomsService.getRoom(roomId);
-    this.server.to(roomId).emit("roomState", room);
+  /**
+   * 部屋状態を全員に通知する
+   *
+   * @param roomId
+   */
+  async emitRoomState(roomId: string) {
+    try {
+      const room = await this.roomsService.getRoom(roomId);
+      this.server.to(roomId).emit("roomState", room);
+    } catch (e) {
+      // If room not found or any error occurs while fetching room state,
+      // don't let it bubble up. This can happen when emit is triggered with
+      // an invite code or stale/invalid id — ignore silently.
+    }
   }
 
+  /**
+   * 部屋の状態が変更されたとき
+   *
+   * @param roomId
+   */
   @OnEvent("room.stateChanged")
   handleRoomStateChanged(roomId: string) {
     this.emitRoomState(roomId);

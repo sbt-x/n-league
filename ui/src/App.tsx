@@ -22,13 +22,16 @@ function App() {
         <main className="bg-gray-100 overflow-auto">
           <Routes>
             <Route path="/" element={<Home />} />
-            <Route path="/rooms/guest-room/:roomId" element={<GuestRoom />} />
             <Route
-              path="/guest-room-enter/:roomId"
+              path="/rooms/guest-room/:inviteCode"
+              element={<GuestRoom />}
+            />
+            <Route
+              path="/guest-room-enter/:inviteCode"
               element={<GuestRoomEnter />}
             />
             <Route path="/create-host-room" element={<CreateHostRoom />} />
-            <Route path="/host-room/:roomId" element={<HostRoom />} />
+            <Route path="/host-room/:inviteCode" element={<HostRoom />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </main>

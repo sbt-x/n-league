@@ -10,7 +10,7 @@ type Member = { id: string; name?: string; isHost?: boolean; uuid?: string };
 type DecodedJwt = { uuid?: string; exp?: number } & Record<string, any>;
 
 const HostRoom: React.FC = () => {
-  const { roomId } = useParams<{ roomId: string }>();
+  const { inviteCode: roomId } = useParams<{ inviteCode: string }>();
   // userJwt cookie から memberId を取得。なければサーバーに新しいトークンをリクエスト
   const [memberId, setMemberId] = React.useState<string>("");
 

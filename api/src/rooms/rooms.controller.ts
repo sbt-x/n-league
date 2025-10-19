@@ -5,13 +5,13 @@ import {
   Param,
   Get,
   Headers,
-  UnauthorizedException,
   UseGuards,
   Req,
 } from "@nestjs/common";
 import { KickRoomDto } from "./dto/kick-room.dto";
 import { CreateRoomDto } from "./dto/create-room.dto";
 import { JoinRoomDto } from "./dto/join-room.dto";
+import { JoinByInviteDto } from "./dto/join-by-invite.dto";
 import { RoomsService } from "./rooms.service";
 import { TokenGuard } from "../common/guards/token.guard";
 import { Request } from "express";
@@ -20,58 +20,88 @@ import { Request } from "express";
 export class RoomsController {
   constructor(private readonly roomsService: RoomsService) {}
 
+  /**
+   * ルームを作成する
+   *
+   * @param dto
+   * @param req
+   * @returns
+   */
   @Post()
   @UseGuards(TokenGuard)
   createRoom(
     @Body() dto: CreateRoomDto,
-    @Req() req: Request & { uuid?: string }
+    @Req() req: Request & { uuid?: string },
+    @Headers("authorization") auth?: string
   ) {
-    const token = req.headers["authorization"]?.replace(/^Bearer\s+/i, "") as
-      | string
-      | undefined;
+    const token = auth?.replace(/^Bearer\s+/i, "");
     return this.roomsService.createRoom(dto, token);
   }
 
-  @Get(":roomId")
-  getRoom(@Param("roomId") roomId: string) {
-    return this.roomsService.getRoom(roomId);
+  /**
+   * ルーム情報を取得する (inviteCode ベース)
+   *
+   * @param inviteCode
+   * @returns
+   */
+  @Get(":inviteCode")
+  async getRoom(@Param("inviteCode") inviteCode: string) {
+    return await this.roomsService.getRoom(inviteCode);
   }
 
-  @Post(":roomId/join")
-  joinRoom(
-    @Param("roomId") roomId: string,
-    @Body() dto: JoinRoomDto,
+  /**
+   * inviteCode で入室する
+   *
+   * POST /rooms/join
+   */
+  @Post("join")
+  joinByInvite(
+    @Body() dto: JoinByInviteDto,
     @Headers("authorization") auth?: string
   ) {
+    // reuse joinRoom service which already accepts id or inviteCode
     return this.roomsService.joinRoom(
-      roomId,
-      dto,
+      dto.inviteCode,
+      { name: dto.name },
       auth?.replace(/^Bearer\s+/i, "")
     );
   }
 
-  @Post(":roomId/leave")
+  /**
+   * ルームを退室する (inviteCode ベース)
+   *
+   * @param inviteCode
+   * @param req
+   * @returns
+   */
+  @Post(":inviteCode/leave")
   @UseGuards(TokenGuard)
   leaveRoom(
-    @Param("roomId") roomId: string,
-    @Req() req: Request & { uuid?: string }
+    @Param("inviteCode") inviteCode: string,
+    @Req() req: Request & { uuid?: string },
+    @Headers("authorization") auth?: string
   ) {
-    const token = req.headers["authorization"]?.replace(/^Bearer\s+/i, "") as
-      | string
-      | undefined;
-    return this.roomsService.leaveRoom(roomId, token);
+    const token = auth?.replace(/^Bearer\s+/i, "");
+    return this.roomsService.leaveRoom(inviteCode, token);
   }
 
-  @Post(":roomId/kick")
+  /**
+   * メンバーをキックする (inviteCode ベース)
+   *
+   * @param inviteCode
+   * @param dto
+   * @param req
+   * @returns
+   */
+  @Post(":inviteCode/kick")
   @UseGuards(TokenGuard)
   kickMember(
-    @Param("roomId") roomId: string,
+    @Param("inviteCode") inviteCode: string,
     @Body() dto: KickRoomDto,
-    @Req() req: Request & { uuid?: string }
+    @Req() req: Request & { uuid?: string },
+    @Headers("authorization") auth?: string
   ) {
-    const token = req.headers["authorization"]?.replace(/^Bearer\s+/i, "") as
-      | string
-      | undefined;
-    return this.roomsService.kickMember(roomId, dto, token);
+    const token = auth?.replace(/^Bearer\s+/i, "");
+    return this.roomsService.kickMember(inviteCode, dto, token);
   }
 }

@@ -38,7 +38,7 @@ export function useRoomSocket(roomId: string, memberId: string) {
       auth: { token },
     });
     socketRef.current = socket;
-    // send only roomId; server uses validated uuid from handshake
+    // send only inviteCode as roomId; server uses validated uuid from handshake
     socket.emit("join", { roomId });
     socket.on("roomState", (state: RoomState) => {
       setRoomState({ ...state, meId: memberId });

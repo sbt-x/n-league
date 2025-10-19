@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 
 const CreateHostRoom: React.FC = () => {
   const [roomName, setRoomName] = useState("");
+  const [maxPlayers, setMaxPlayers] = useState<number>(6);
   const [error, setError] = useState("");
   const navigate = useNavigate();
 
@@ -18,12 +19,13 @@ const CreateHostRoom: React.FC = () => {
       }
       const response = await axios.post(
         `${import.meta.env.VITE_API_URL}/rooms`,
-        { name: roomName },
+        { name: roomName, maxPeople: maxPlayers },
         { headers: token ? { Authorization: `Bearer ${token}` } : undefined }
       );
       console.log("Room created:", response.data);
       // 部屋作成成功時にHostRoomページへ遷移（roomIdをURLに含める）
-      navigate(`/host-room/${response.data.roomId}`);
+      // navigate using inviteCode (server returns inviteCode)
+      navigate(`/host-room/${response.data.inviteCode}`);
       setError("");
     } catch (err: any) {
       setError(err.response?.data?.message || "部屋の作成に失敗しました");
@@ -38,6 +40,15 @@ const CreateHostRoom: React.FC = () => {
         placeholder="部屋名を入力"
         value={roomName}
         onChange={(e) => setRoomName(e.target.value)}
+        className="border p-2 mb-2 rounded"
+      />
+      <input
+        type="number"
+        placeholder="最大参加人数"
+        min={2}
+        max={20}
+        value={maxPlayers}
+        onChange={(e) => setMaxPlayers(Number(e.target.value))}
         className="border p-2 mb-2 rounded"
       />
       <button

@@ -8,14 +8,28 @@ import { JoinRoomDto } from "./dto/join-room.dto";
 import { nanoid } from "nanoid";
 import { EventEmitter2 } from "@nestjs/event-emitter";
 import { TokenService } from "../token/token.service";
+import { PrismaService } from "../prisma/prisma.service";
+import { Role } from "@prisma/client";
 
 @Injectable()
 export class RoomsService {
-  private rooms: Record<string, any> = {};
   constructor(
     private readonly eventEmitter: EventEmitter2,
-    private readonly tokenService: TokenService
+    private readonly tokenService: TokenService,
+    private readonly prisma: PrismaService
   ) {}
+
+  /**
+   * Resolve a room by its inviteCode.
+   * Returns the room with members included or null if not found.
+   */
+  private async findRoomByInviteCode(inviteCode: string): Promise<any | null> {
+    const room = await this.prisma.room.findUnique({
+      where: { inviteCode },
+      include: { members: true },
+    });
+    return room;
+  }
 
   /**
    * JWTトークンを検証し、UUIDを取得
@@ -24,127 +38,292 @@ export class RoomsService {
     return this.tokenService.verifyUserToken(token);
   }
 
-  createRoom(dto: CreateRoomDto, token?: string) {
-    const roomId = nanoid(8);
-    const hostId = nanoid(12);
-    // attach uuid to host if token provided and valid
+  /**
+   * ルームを作成する
+   *
+   * @param dto
+   * @param token
+   * @returns
+   */
+  async createRoom(dto: CreateRoomDto, token?: string) {
+    // トークンが提供され、有効であればホストのUUIDを取得
     let hostUuid: string | undefined = undefined;
     if (token) {
       hostUuid = this.tokenService.verifyUserToken(token) ?? undefined;
     }
-    const hostMember: any = { id: hostId, name: dto.hostName, isHost: true };
-    if (hostUuid) hostMember.uuid = hostUuid;
-    this.rooms[roomId] = {
-      roomId,
-      hostId,
-      hostName: dto.hostName,
-      maxPlayers: dto.maxPlayers,
-      members: [hostMember],
-    };
+    if (!hostUuid) {
+      throw new BadRequestException("Invalid token");
+    }
+
+    // generate short inviteCode and retry if unique constraint conflict occurs
+    const maxAttempts = 5;
+    let createdRoom: any = null;
+    let inviteCode: string | undefined = undefined;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      inviteCode = nanoid(8);
+      try {
+        createdRoom = await this.prisma.room.create({
+          data: {
+            name: dto.name,
+            maxPlayers: dto.maxPlayers ?? 6,
+            inviteCode,
+            members: {
+              create: {
+                name: dto.name,
+                uuid: hostUuid,
+                role: Role.host,
+              },
+            },
+          },
+          include: { members: true },
+        });
+        break;
+      } catch (e: any) {
+        // Prisma unique constraint error code P2002
+        if (e?.code === "P2002") {
+          // collision on inviteCode, retry
+          continue;
+        }
+        throw e;
+      }
+    }
+    if (!createdRoom) {
+      throw new BadRequestException("Failed to generate unique invite code");
+    }
+
+    const roomId = createdRoom.id;
+    const hostMember = createdRoom.members[0];
+
+    // no in-memory cache: DB is source-of-truth
+
     const result = {
       roomId,
-      hostId,
-      inviteUrl: `/rooms/${roomId}`,
+      hostId: hostMember.id,
+      inviteCode,
     };
     this.eventEmitter.emit("room.stateChanged", roomId);
     return result;
   }
 
-  getRoom(roomId: string) {
-    const room = this.rooms[roomId];
+  /**
+   * ルーム情報を取得する
+   *
+   * @param roomId
+   * @returns
+   */
+  async getRoom(inviteCode: string) {
+    const room = await this.findRoomByInviteCode(inviteCode);
     if (!room) throw new NotFoundException("Room not found");
+
+    const members = room.members.map((m) => ({
+      id: m.id,
+      name: m.name,
+      isHost: m.role === Role.host,
+      uuid: m.uuid,
+    }));
+
+    const host = members.find((m) => m.isHost);
+
     return {
-      ...room,
-      isFull: room.members.length >= room.maxPlayers,
+      roomId: room.id,
+      hostId: host?.id,
+      roomName: room.name,
+      maxPlayers: room.maxPlayers,
+      members,
+      isFull: members.length >= room.maxPlayers,
     };
   }
 
-  joinRoom(roomId: string, dto: JoinRoomDto, token?: string) {
-    const room = this.rooms[roomId];
+  /**
+   * ルームに入室する
+   *
+   * @param roomId
+   * @param dto
+   * @param token
+   * @returns
+   */
+  async joinRoom(inviteCode: string, dto: JoinRoomDto, token?: string) {
+    // 指定された inviteCode のルームをDBから取得し存在チェック
+    const room = await this.findRoomByInviteCode(inviteCode);
     if (!room) throw new NotFoundException("Room not found");
-    if (room.members.length >= room.maxPlayers)
+
+    // ルームが定員に達していないか確認する
+    if (room.members.length >= room.maxPlayers) {
       throw new BadRequestException("Room is full");
-    const memberId = nanoid(12);
-    const member: any = { id: memberId, name: dto.name, isHost: false };
-    if (token) {
-      const uuid = this.tokenService.verifyUserToken(token);
-      if (uuid) member.uuid = uuid;
     }
-    room.members.push(member);
-    this.eventEmitter.emit("room.stateChanged", roomId);
-    return { memberId, isHost: false };
+
+    // トークンが渡されていれば検証してユーザーの UUID を取得する
+    let memberUuid: string | undefined = undefined;
+    if (token) {
+      memberUuid = this.tokenService.verifyUserToken(token) ?? undefined;
+    }
+
+    // 認証されていないゲストの場合、DB の非 NULL 制約を満たすために内部 UUID を生成する
+    if (!memberUuid) {
+      memberUuid = nanoid(12);
+    }
+
+    // member レコードを DB に作成する
+    let createdMember: any;
+    try {
+      createdMember = await this.prisma.member.create({
+        data: {
+          name: dto.name,
+          uuid: memberUuid,
+          role: Role.guest,
+          room: { connect: { id: room.id } },
+        },
+      });
+    } catch (e: any) {
+      // P2002: 一意制約違反の場合は既存の member を検索してそれを使用する
+      if (e?.code === "P2002") {
+        const existing = await this.prisma.member.findFirst({
+          where: { roomId: room.id, uuid: memberUuid },
+        });
+        if (existing) {
+          createdMember = existing;
+        } else {
+          throw e;
+        }
+      } else {
+        throw e;
+      }
+    }
+
+    // emit state changed so gateways fetch fresh state from DB
+    // emit using canonical room id
+    this.eventEmitter.emit("room.stateChanged", room.id);
+
+    return {
+      memberId: createdMember.id,
+      isHost: createdMember.role === Role.host,
+    };
   }
 
-  leaveRoom(roomId: string, token?: string) {
-    const room = this.rooms[roomId];
-    if (!room) throw new NotFoundException("Room not found");
+  /**
+   * ルームを退室する
+   *
+   * @param roomId
+   * @param token
+   * @returns
+   */
+  async leaveRoom(inviteCode: string, token?: string) {
     if (!token) throw new BadRequestException("Authorization token required");
-    let uuid: string | null = null;
-    try {
-      uuid = this.tokenService.verifyUserToken(token);
-    } catch (e) {
-      // verifyUserToken returns null on invalid; keep behavior
-    }
+    const uuid = this.tokenService.verifyUserToken(token);
     if (!uuid) throw new BadRequestException("Invalid token");
-    const idx = room.members.findIndex((m: any) => m.uuid === uuid);
-    if (idx === -1) throw new NotFoundException("Member not found");
-    const wasHost = room.members[idx].isHost;
-    room.members.splice(idx, 1);
-    // ホストが抜けた場合は自動で引き継ぎ
-    if (wasHost && room.members.length > 0) {
-      room.members[0].isHost = true;
-      room.hostId = room.members[0].id;
-      room.hostName = room.members[0].name;
+    // resolve room by inviteCode
+    const room = await this.findRoomByInviteCode(inviteCode);
+    if (!room) throw new NotFoundException("Room not found");
+
+    // find member in DB by roomId + uuid
+    const member = await this.prisma.member.findFirst({
+      where: { roomId: room.id, uuid },
+    });
+    if (!member) throw new NotFoundException("Member not found");
+
+    const wasHost = member.role === Role.host;
+
+    // delete member
+    try {
+      await this.prisma.member.delete({ where: { id: member.id } });
+    } catch (e: any) {
+      // ignore if already deleted
     }
-    this.eventEmitter.emit("room.stateChanged", roomId);
+
+    if (wasHost) {
+      const remaining = await this.prisma.member.findMany({
+        where: { roomId: room.id },
+        orderBy: { createdAt: "asc" },
+      });
+      if (remaining.length > 0) {
+        const newHost = remaining[0];
+        await this.prisma.member.update({
+          where: { id: newHost.id },
+          data: { role: Role.host },
+        });
+      } else {
+        // no remaining members: delete room
+        try {
+          await this.prisma.room.delete({ where: { id: room.id } });
+        } catch (e: any) {}
+      }
+    }
+    this.eventEmitter.emit("room.stateChanged", room.id);
     return { success: true };
   }
-  kickMember(
-    roomId: string,
+
+  /**
+   * メンバーをキックする
+   *
+   * @param roomId
+   * @param dto
+   * @param token
+   * @returns
+   */
+  async kickMember(
+    inviteCode: string,
     dto: { hostId: string; memberId?: string; memberUuid?: string },
     token?: string
   ) {
-    const room = this.rooms[roomId];
-    if (!room) throw new NotFoundException("Room not found");
-    // verify caller is host: token is required and must match host's uuid if host has uuid
+    // DB-driven kick: verify token owner is current host in this room
     if (!token) throw new BadRequestException("Authorization token required");
-    try {
-      const hostMember = room.members.find((m: any) => m.id === room.hostId);
-      if (!hostMember) throw new NotFoundException("Host not found");
-      // if host has uuid, require token.uuid to match; otherwise disallow kicking without host uuid
-      if (hostMember.uuid) {
-        if (!this.tokenService.isTokenOwnerOfMember(token, hostMember)) {
-          throw new BadRequestException("Only host can kick");
-        }
-      } else {
-        // host has no uuid attached -> do not allow kick by token-less or unknown token
-        throw new BadRequestException(
-          "Host must be authenticated to perform this action"
-        );
-      }
-    } catch (e) {
-      if (e instanceof BadRequestException || e instanceof NotFoundException)
-        throw e;
-      throw new BadRequestException("Invalid token");
+    const tokenUuid = this.tokenService.verifyUserToken(token);
+    if (!tokenUuid) throw new BadRequestException("Invalid token");
+
+    // resolve room by inviteCode
+    const room = await this.findRoomByInviteCode(inviteCode);
+    if (!room) throw new NotFoundException("Room not found");
+
+    // verify token owner is host of the room
+    const caller = await this.prisma.member.findFirst({
+      where: { roomId: room.id, uuid: tokenUuid },
+    });
+    if (!caller || caller.role !== Role.host) {
+      throw new BadRequestException("Only host can kick");
     }
-    // まず memberUuid でターゲットを特定し、できない場合は memberId を代わりに使用する
-    let idx = -1;
+
+    // determine target member
+    let target: any = null;
     if (dto.memberUuid) {
-      idx = room.members.findIndex((m: any) => m.uuid === dto.memberUuid);
+      target = await this.prisma.member.findFirst({
+        where: { roomId: room.id, uuid: dto.memberUuid },
+      });
     }
-    if (idx === -1 && dto.memberId) {
-      idx = room.members.findIndex((m: any) => m.id === dto.memberId);
+    if (!target && dto.memberId) {
+      target = await this.prisma.member.findUnique({
+        where: { id: dto.memberId },
+      });
+      if (target && target.roomId !== room.id) target = null;
     }
-    if (idx === -1) throw new NotFoundException("Member not found");
-    const wasHost = room.members[idx].isHost;
-    const removedMember = room.members.splice(idx, 1)[0];
-    // ホストが抜けた場合は自動で引き継ぎ
-    if (wasHost && room.members.length > 0) {
-      room.members[0].isHost = true;
-      room.hostId = room.members[0].id;
-      room.hostName = room.members[0].name;
+    if (!target) throw new NotFoundException("Member not found");
+
+    const wasHost = target.role === Role.host;
+
+    try {
+      await this.prisma.member.delete({ where: { id: target.id } });
+    } catch (e: any) {
+      // ignore
     }
-    this.eventEmitter.emit("room.stateChanged", roomId);
-    return { success: true, kicked: removedMember.id };
+
+    if (wasHost) {
+      const remaining = await this.prisma.member.findMany({
+        where: { roomId: room.id },
+        orderBy: { createdAt: "asc" },
+      });
+      if (remaining.length > 0) {
+        const newHost = remaining[0];
+        await this.prisma.member.update({
+          where: { id: newHost.id },
+          data: { role: Role.host },
+        });
+      } else {
+        try {
+          await this.prisma.room.delete({ where: { id: room.id } });
+        } catch (e: any) {}
+      }
+    }
+
+    this.eventEmitter.emit("room.stateChanged", room.id);
+    return { success: true, kicked: target.id };
   }
 }

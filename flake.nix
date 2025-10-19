@@ -16,6 +16,7 @@
         bashInteractive = pkgs.bashInteractive;
         nodejs = pkgs.nodejs_24;
         prisma-engines = pkgs.prisma-engines;
+        postgresql = pkgs.postgresql;
       in {
         devShells.default = pkgs.mkShell {
           nativeBuildInputs = [
@@ -24,6 +25,7 @@
 
           buildInputs = [
             nodejs
+            postgresql
             prisma-engines
             pkgs.openssl
             pkgs.pkg-config
@@ -38,17 +40,6 @@
             echo "Node.js: $(node --version)"
             echo "npm: $(npm --version)"
           '';
-
-          packages = [
-            (pkgs.writeShellScriptBin "db-start" ''
-              set -euo pipefail
-              PGDATA="$PWD/api/postgres"
-              SOCKET_DIR="$PGDATA/socket"
-              mkdir -p "$SOCKET_DIR"
-              pg_ctl -D "$PGDATA" -l "$PGDATA/logfile" start -o "-h 127.0.0.1 -k $SOCKET_DIR"
-              # createuser -s postgres -h 127.0.0.1
-            '')
-          ];
         };
       });
 }

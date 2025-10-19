@@ -38,17 +38,6 @@
             echo "Node.js: $(node --version)"
             echo "npm: $(npm --version)"
           '';
-
-          packages = [
-            (pkgs.writeShellScriptBin "db-start" ''
-              set -euo pipefail
-              PGDATA="$PWD/api/postgres"
-              SOCKET_DIR="$PGDATA/socket"
-              mkdir -p "$SOCKET_DIR"
-              pg_ctl -D "$PGDATA" -l "$PGDATA/logfile" start -o "-h 127.0.0.1 -k $SOCKET_DIR"
-              # createuser -s postgres -h 127.0.0.1
-            '')
-          ];
         };
       });
 }

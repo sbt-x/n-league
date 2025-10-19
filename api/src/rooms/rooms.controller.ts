@@ -20,6 +20,13 @@ import { Request } from "express";
 export class RoomsController {
   constructor(private readonly roomsService: RoomsService) {}
 
+  /**
+   * ルームを作成する
+   *
+   * @param dto
+   * @param req
+   * @returns
+   */
   @Post()
   @UseGuards(TokenGuard)
   createRoom(
@@ -32,11 +39,25 @@ export class RoomsController {
     return this.roomsService.createRoom(dto, token);
   }
 
+  /**
+   * ルーム情報を取得する
+   *
+   * @param roomId
+   * @returns
+   */
   @Get(":roomId")
   getRoom(@Param("roomId") roomId: string) {
     return this.roomsService.getRoom(roomId);
   }
 
+  /**
+   * ルームに入室する
+   *
+   * @param roomId
+   * @param dto
+   * @param auth
+   * @returns
+   */
   @Post(":roomId/join")
   joinRoom(
     @Param("roomId") roomId: string,
@@ -50,6 +71,13 @@ export class RoomsController {
     );
   }
 
+  /**
+   * ルームを退室する
+   *
+   * @param roomId
+   * @param req
+   * @returns
+   */
   @Post(":roomId/leave")
   @UseGuards(TokenGuard)
   leaveRoom(
@@ -62,6 +90,14 @@ export class RoomsController {
     return this.roomsService.leaveRoom(roomId, token);
   }
 
+  /**
+   * メンバーをキックする
+   *
+   * @param roomId
+   * @param dto
+   * @param req
+   * @returns
+   */
   @Post(":roomId/kick")
   @UseGuards(TokenGuard)
   kickMember(

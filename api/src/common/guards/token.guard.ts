@@ -15,7 +15,7 @@ export class TokenGuard implements CanActivate {
     const req = context
       .switchToHttp()
       .getRequest<Request & { uuid?: string }>();
-    const auth = req.headers["authorization"] as string | undefined;
+    const auth = req.get("authorization");
     const token = auth?.replace(/^Bearer\s+/i, "");
     if (!token) throw new UnauthorizedException("Authorization token required");
     const uuid = this.tokenService.verifyUserToken(token);

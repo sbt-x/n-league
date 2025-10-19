@@ -30,11 +30,10 @@ export class RoomsController {
   @UseGuards(TokenGuard)
   createRoom(
     @Body() dto: CreateRoomDto,
-    @Req() req: Request & { uuid?: string }
+    @Req() req: Request & { uuid?: string },
+    @Headers("authorization") auth?: string
   ) {
-    const token = req.headers["authorization"]?.replace(/^Bearer\s+/i, "") as
-      | string
-      | undefined;
+    const token = auth?.replace(/^Bearer\s+/i, "");
     return this.roomsService.createRoom(dto, token);
   }
 
@@ -81,11 +80,10 @@ export class RoomsController {
   @UseGuards(TokenGuard)
   leaveRoom(
     @Param("roomId") roomId: string,
-    @Req() req: Request & { uuid?: string }
+    @Req() req: Request & { uuid?: string },
+    @Headers("authorization") auth?: string
   ) {
-    const token = req.headers["authorization"]?.replace(/^Bearer\s+/i, "") as
-      | string
-      | undefined;
+    const token = auth?.replace(/^Bearer\s+/i, "");
     return this.roomsService.leaveRoom(roomId, token);
   }
 
@@ -102,11 +100,10 @@ export class RoomsController {
   kickMember(
     @Param("roomId") roomId: string,
     @Body() dto: KickRoomDto,
-    @Req() req: Request & { uuid?: string }
+    @Req() req: Request & { uuid?: string },
+    @Headers("authorization") auth?: string
   ) {
-    const token = req.headers["authorization"]?.replace(/^Bearer\s+/i, "") as
-      | string
-      | undefined;
+    const token = auth?.replace(/^Bearer\s+/i, "");
     return this.roomsService.kickMember(roomId, dto, token);
   }
 }

@@ -16,6 +16,7 @@
         bashInteractive = pkgs.bashInteractive;
         nodejs = pkgs.nodejs_24;
         prisma-engines = pkgs.prisma-engines;
+        postgresql = pkgs.postgresql;
       in {
         devShells.default = pkgs.mkShell {
           nativeBuildInputs = [
@@ -24,6 +25,7 @@
 
           buildInputs = [
             nodejs
+            postgresql
             prisma-engines
             pkgs.openssl
             pkgs.pkg-config

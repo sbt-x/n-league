@@ -94,7 +94,27 @@ export class RoomsGateway {
     const uuid = client.data?.uuid as string | undefined;
     if (!uuid) return;
     client.leave(data.roomId);
+    const token = (client.handshake?.auth as any)?.token as string | undefined;
+    // persist leave to DB
+    this.roomsService.leaveRoom(data.roomId, token).catch(() => {});
     this.emitRoomState(data.roomId);
+  }
+
+  async handleDisconnect(client: Socket) {
+    // when a socket disconnects, attempt to remove the member from any rooms
+    const uuid = client.data?.uuid as string | undefined;
+    if (!uuid) return;
+    // try to extract token from handshake if available to call leaveRoom
+    const token = (client.handshake?.auth as any)?.token as string | undefined;
+    // iterate rooms the socket was part of and call leaveRoom to persist
+    const rooms = Array.from(client.rooms).filter((r) => r !== client.id);
+    for (const roomId of rooms) {
+      try {
+        await this.roomsService.leaveRoom(roomId, token);
+      } catch (e) {
+        // ignore errors for now
+      }
+    }
   }
 
   /**
@@ -129,8 +149,9 @@ export class RoomsGateway {
    * @param roomId
    */
   emitRoomState(roomId: string) {
-    const room = this.roomsService.getRoom(roomId);
-    this.server.to(roomId).emit("roomState", room);
+    this.roomsService.getRoom(roomId).then((room) => {
+      this.server.to(roomId).emit("roomState", room);
+    });
   }
 
   /**

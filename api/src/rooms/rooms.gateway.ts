@@ -148,10 +148,15 @@ export class RoomsGateway {
    *
    * @param roomId
    */
-  emitRoomState(roomId: string) {
-    this.roomsService.getRoom(roomId).then((room) => {
+  async emitRoomState(roomId: string) {
+    try {
+      const room = await this.roomsService.getRoom(roomId);
       this.server.to(roomId).emit("roomState", room);
-    });
+    } catch (e) {
+      // If room not found or any error occurs while fetching room state,
+      // don't let it bubble up. This can happen when emit is triggered with
+      // an invite code or stale/invalid id — ignore silently.
+    }
   }
 
   /**

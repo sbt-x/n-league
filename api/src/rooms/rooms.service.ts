@@ -20,6 +20,27 @@ export class RoomsService {
   ) {}
 
   /**
+   * Resolve a room by its DB id or by inviteCode.
+   * Returns the room with members included or null if not found.
+   */
+  private async findRoomByIdOrInviteCode(
+    idOrCode: string
+  ): Promise<any | null> {
+    // try by id first
+    let room = await this.prisma.room.findUnique({
+      where: { id: idOrCode },
+      include: { members: true },
+    });
+    if (room) return room;
+    // then try inviteCode
+    room = await this.prisma.room.findUnique({
+      where: { inviteCode: idOrCode },
+      include: { members: true },
+    });
+    return room;
+  }
+
+  /**
    * JWTトークンを検証し、UUIDを取得
    */
   verifyUserToken(token: string): string | null {
@@ -100,13 +121,8 @@ export class RoomsService {
    * @returns
    */
   async getRoom(roomId: string) {
-    const room = await this.prisma.room.findUnique({
-      where: { id: roomId },
-      include: { members: true },
-    });
-    if (!room) {
-      throw new NotFoundException("Room not found");
-    }
+    const room = await this.findRoomByIdOrInviteCode(roomId);
+    if (!room) throw new NotFoundException("Room not found");
 
     const members = room.members.map((m) => ({
       id: m.id,
@@ -137,13 +153,8 @@ export class RoomsService {
    */
   async joinRoom(roomId: string, dto: JoinRoomDto, token?: string) {
     // 指定された roomId のルームをDBから取得し存在チェック
-    const room = await this.prisma.room.findUnique({
-      where: { id: roomId },
-      include: { members: true },
-    });
-    if (!room) {
-      throw new NotFoundException("Room not found");
-    }
+    const room = await this.findRoomByIdOrInviteCode(roomId);
+    if (!room) throw new NotFoundException("Room not found");
 
     // ルームが定員に達していないか確認する
     if (room.members.length >= room.maxPlayers) {
@@ -169,14 +180,14 @@ export class RoomsService {
           name: dto.name,
           uuid: memberUuid,
           role: Role.guest,
-          room: { connect: { id: roomId } },
+          room: { connect: { id: room.id } },
         },
       });
     } catch (e: any) {
       // P2002: 一意制約違反の場合は既存の member を検索してそれを使用する
       if (e?.code === "P2002") {
         const existing = await this.prisma.member.findFirst({
-          where: { roomId, uuid: memberUuid },
+          where: { roomId: room.id, uuid: memberUuid },
         });
         if (existing) {
           createdMember = existing;
@@ -189,7 +200,8 @@ export class RoomsService {
     }
 
     // emit state changed so gateways fetch fresh state from DB
-    this.eventEmitter.emit("room.stateChanged", roomId);
+    // emit using canonical room id
+    this.eventEmitter.emit("room.stateChanged", room.id);
 
     return {
       memberId: createdMember.id,
@@ -208,10 +220,13 @@ export class RoomsService {
     if (!token) throw new BadRequestException("Authorization token required");
     const uuid = this.tokenService.verifyUserToken(token);
     if (!uuid) throw new BadRequestException("Invalid token");
+    // resolve room id if an inviteCode was supplied
+    const room = await this.findRoomByIdOrInviteCode(roomId);
+    if (!room) throw new NotFoundException("Room not found");
 
     // find member in DB by roomId + uuid
     const member = await this.prisma.member.findFirst({
-      where: { roomId, uuid },
+      where: { roomId: room.id, uuid },
     });
     if (!member) throw new NotFoundException("Member not found");
 
@@ -226,7 +241,7 @@ export class RoomsService {
 
     if (wasHost) {
       const remaining = await this.prisma.member.findMany({
-        where: { roomId },
+        where: { roomId: room.id },
         orderBy: { createdAt: "asc" },
       });
       if (remaining.length > 0) {
@@ -238,12 +253,11 @@ export class RoomsService {
       } else {
         // no remaining members: delete room
         try {
-          await this.prisma.room.delete({ where: { id: roomId } });
+          await this.prisma.room.delete({ where: { id: room.id } });
         } catch (e: any) {}
       }
     }
-
-    this.eventEmitter.emit("room.stateChanged", roomId);
+    this.eventEmitter.emit("room.stateChanged", room.id);
     return { success: true };
   }
 
@@ -265,9 +279,13 @@ export class RoomsService {
     const tokenUuid = this.tokenService.verifyUserToken(token);
     if (!tokenUuid) throw new BadRequestException("Invalid token");
 
+    // resolve room id if an inviteCode was supplied
+    const room = await this.findRoomByIdOrInviteCode(roomId);
+    if (!room) throw new NotFoundException("Room not found");
+
     // verify token owner is host of the room
     const caller = await this.prisma.member.findFirst({
-      where: { roomId, uuid: tokenUuid },
+      where: { roomId: room.id, uuid: tokenUuid },
     });
     if (!caller || caller.role !== Role.host) {
       throw new BadRequestException("Only host can kick");
@@ -277,14 +295,14 @@ export class RoomsService {
     let target: any = null;
     if (dto.memberUuid) {
       target = await this.prisma.member.findFirst({
-        where: { roomId, uuid: dto.memberUuid },
+        where: { roomId: room.id, uuid: dto.memberUuid },
       });
     }
     if (!target && dto.memberId) {
       target = await this.prisma.member.findUnique({
         where: { id: dto.memberId },
       });
-      if (target && target.roomId !== roomId) target = null;
+      if (target && target.roomId !== room.id) target = null;
     }
     if (!target) throw new NotFoundException("Member not found");
 
@@ -298,7 +316,7 @@ export class RoomsService {
 
     if (wasHost) {
       const remaining = await this.prisma.member.findMany({
-        where: { roomId },
+        where: { roomId: room.id },
         orderBy: { createdAt: "asc" },
       });
       if (remaining.length > 0) {
@@ -309,12 +327,12 @@ export class RoomsService {
         });
       } else {
         try {
-          await this.prisma.room.delete({ where: { id: roomId } });
+          await this.prisma.room.delete({ where: { id: room.id } });
         } catch (e: any) {}
       }
     }
 
-    this.eventEmitter.emit("room.stateChanged", roomId);
+    this.eventEmitter.emit("room.stateChanged", room.id);
     return { success: true, kicked: target.id };
   }
 }

@@ -24,6 +24,13 @@ export class RoomsService {
     return this.tokenService.verifyUserToken(token);
   }
 
+  /**
+   * ルームを作成する
+   *
+   * @param dto
+   * @param token
+   * @returns
+   */
   createRoom(dto: CreateRoomDto, token?: string) {
     const roomId = nanoid(8);
     const hostId = nanoid(12);
@@ -50,6 +57,12 @@ export class RoomsService {
     return result;
   }
 
+  /**
+   * ルーム情報を取得する
+   *
+   * @param roomId
+   * @returns
+   */
   getRoom(roomId: string) {
     const room = this.rooms[roomId];
     if (!room) throw new NotFoundException("Room not found");
@@ -59,6 +72,14 @@ export class RoomsService {
     };
   }
 
+  /**
+   * ルームに入室する
+   *
+   * @param roomId
+   * @param dto
+   * @param token
+   * @returns
+   */
   joinRoom(roomId: string, dto: JoinRoomDto, token?: string) {
     const room = this.rooms[roomId];
     if (!room) throw new NotFoundException("Room not found");
@@ -75,6 +96,13 @@ export class RoomsService {
     return { memberId, isHost: false };
   }
 
+  /**
+   * ルームを退室する
+   *
+   * @param roomId
+   * @param token
+   * @returns
+   */
   leaveRoom(roomId: string, token?: string) {
     const room = this.rooms[roomId];
     if (!room) throw new NotFoundException("Room not found");
@@ -99,6 +127,15 @@ export class RoomsService {
     this.eventEmitter.emit("room.stateChanged", roomId);
     return { success: true };
   }
+
+  /**
+   * メンバーをキックする
+   *
+   * @param roomId
+   * @param dto
+   * @param token
+   * @returns
+   */
   kickMember(
     roomId: string,
     dto: { hostId: string; memberId?: string; memberUuid?: string },
@@ -106,18 +143,16 @@ export class RoomsService {
   ) {
     const room = this.rooms[roomId];
     if (!room) throw new NotFoundException("Room not found");
-    // verify caller is host: token is required and must match host's uuid if host has uuid
     if (!token) throw new BadRequestException("Authorization token required");
+
     try {
       const hostMember = room.members.find((m: any) => m.id === room.hostId);
       if (!hostMember) throw new NotFoundException("Host not found");
-      // if host has uuid, require token.uuid to match; otherwise disallow kicking without host uuid
       if (hostMember.uuid) {
         if (!this.tokenService.isTokenOwnerOfMember(token, hostMember)) {
           throw new BadRequestException("Only host can kick");
         }
       } else {
-        // host has no uuid attached -> do not allow kick by token-less or unknown token
         throw new BadRequestException(
           "Host must be authenticated to perform this action"
         );
@@ -127,6 +162,7 @@ export class RoomsService {
         throw e;
       throw new BadRequestException("Invalid token");
     }
+
     // まず memberUuid でターゲットを特定し、できない場合は memberId を代わりに使用する
     let idx = -1;
     if (dto.memberUuid) {

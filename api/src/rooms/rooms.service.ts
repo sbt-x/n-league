@@ -20,21 +20,12 @@ export class RoomsService {
   ) {}
 
   /**
-   * Resolve a room by its DB id or by inviteCode.
+   * Resolve a room by its inviteCode.
    * Returns the room with members included or null if not found.
    */
-  private async findRoomByIdOrInviteCode(
-    idOrCode: string
-  ): Promise<any | null> {
-    // try by id first
-    let room = await this.prisma.room.findUnique({
-      where: { id: idOrCode },
-      include: { members: true },
-    });
-    if (room) return room;
-    // then try inviteCode
-    room = await this.prisma.room.findUnique({
-      where: { inviteCode: idOrCode },
+  private async findRoomByInviteCode(inviteCode: string): Promise<any | null> {
+    const room = await this.prisma.room.findUnique({
+      where: { inviteCode },
       include: { members: true },
     });
     return room;
@@ -120,8 +111,8 @@ export class RoomsService {
    * @param roomId
    * @returns
    */
-  async getRoom(roomId: string) {
-    const room = await this.findRoomByIdOrInviteCode(roomId);
+  async getRoom(inviteCode: string) {
+    const room = await this.findRoomByInviteCode(inviteCode);
     if (!room) throw new NotFoundException("Room not found");
 
     const members = room.members.map((m) => ({
@@ -151,9 +142,9 @@ export class RoomsService {
    * @param token
    * @returns
    */
-  async joinRoom(roomId: string, dto: JoinRoomDto, token?: string) {
-    // 指定された roomId のルームをDBから取得し存在チェック
-    const room = await this.findRoomByIdOrInviteCode(roomId);
+  async joinRoom(inviteCode: string, dto: JoinRoomDto, token?: string) {
+    // 指定された inviteCode のルームをDBから取得し存在チェック
+    const room = await this.findRoomByInviteCode(inviteCode);
     if (!room) throw new NotFoundException("Room not found");
 
     // ルームが定員に達していないか確認する
@@ -216,12 +207,12 @@ export class RoomsService {
    * @param token
    * @returns
    */
-  async leaveRoom(roomId: string, token?: string) {
+  async leaveRoom(inviteCode: string, token?: string) {
     if (!token) throw new BadRequestException("Authorization token required");
     const uuid = this.tokenService.verifyUserToken(token);
     if (!uuid) throw new BadRequestException("Invalid token");
-    // resolve room id if an inviteCode was supplied
-    const room = await this.findRoomByIdOrInviteCode(roomId);
+    // resolve room by inviteCode
+    const room = await this.findRoomByInviteCode(inviteCode);
     if (!room) throw new NotFoundException("Room not found");
 
     // find member in DB by roomId + uuid
@@ -270,7 +261,7 @@ export class RoomsService {
    * @returns
    */
   async kickMember(
-    roomId: string,
+    inviteCode: string,
     dto: { hostId: string; memberId?: string; memberUuid?: string },
     token?: string
   ) {
@@ -279,8 +270,8 @@ export class RoomsService {
     const tokenUuid = this.tokenService.verifyUserToken(token);
     if (!tokenUuid) throw new BadRequestException("Invalid token");
 
-    // resolve room id if an inviteCode was supplied
-    const room = await this.findRoomByIdOrInviteCode(roomId);
+    // resolve room by inviteCode
+    const room = await this.findRoomByInviteCode(inviteCode);
     if (!room) throw new NotFoundException("Room not found");
 
     // verify token owner is host of the room

@@ -11,6 +11,7 @@ import {
 import { KickRoomDto } from "./dto/kick-room.dto";
 import { CreateRoomDto } from "./dto/create-room.dto";
 import { JoinRoomDto } from "./dto/join-room.dto";
+import { JoinByInviteDto } from "./dto/join-by-invite.dto";
 import { RoomsService } from "./rooms.service";
 import { TokenGuard } from "../common/guards/token.guard";
 import { Request } from "express";
@@ -38,72 +39,69 @@ export class RoomsController {
   }
 
   /**
-   * ルーム情報を取得する
+   * ルーム情報を取得する (inviteCode ベース)
    *
-   * @param roomId
+   * @param inviteCode
    * @returns
    */
-  @Get(":roomId")
-  async getRoom(@Param("roomId") roomId: string) {
-    return await this.roomsService.getRoom(roomId);
+  @Get(":inviteCode")
+  async getRoom(@Param("inviteCode") inviteCode: string) {
+    return await this.roomsService.getRoom(inviteCode);
   }
 
   /**
-   * ルームに入室する
+   * inviteCode で入室する
    *
-   * @param roomId
-   * @param dto
-   * @param auth
-   * @returns
+   * POST /rooms/join
    */
-  @Post(":roomId/join")
-  joinRoom(
-    @Param("roomId") roomId: string,
-    @Body() dto: JoinRoomDto,
+  @Post("join")
+  joinByInvite(
+    @Body() dto: JoinByInviteDto,
     @Headers("authorization") auth?: string
   ) {
+    // reuse joinRoom service which already accepts id or inviteCode
     return this.roomsService.joinRoom(
-      roomId,
-      dto,
+      dto.inviteCode,
+      { name: dto.name },
       auth?.replace(/^Bearer\s+/i, "")
     );
   }
 
   /**
-   * ルームを退室する
+   * ルームを退室する (inviteCode ベース)
    *
-   * @param roomId
+   * @param inviteCode
    * @param req
    * @returns
    */
-  @Post(":roomId/leave")
+  @Post(":inviteCode/leave")
   @UseGuards(TokenGuard)
   leaveRoom(
-    @Param("roomId") roomId: string,
+    @Param("inviteCode") inviteCode: string,
     @Req() req: Request & { uuid?: string },
     @Headers("authorization") auth?: string
   ) {
     const token = auth?.replace(/^Bearer\s+/i, "");
-    return this.roomsService.leaveRoom(roomId, token);
+    return this.roomsService.leaveRoom(inviteCode, token);
   }
 
   /**
-   * メンバーをキックする
+   * メンバーをキックする (inviteCode ベース)
    *
-   * @param roomId
+   * @param inviteCode
    * @param dto
    * @param req
    * @returns
    */
-  @Post(":roomId/kick")
+  @Post(":inviteCode/kick")
   @UseGuards(TokenGuard)
   kickMember(
-    @Param("roomId") roomId: string,
+    @Param("inviteCode") inviteCode: string,
     @Body() dto: KickRoomDto,
     @Req() req: Request & { uuid?: string },
     @Headers("authorization") auth?: string
   ) {
     const token = auth?.replace(/^Bearer\s+/i, "");
-    return this.roomsService.kickMember(roomId, dto, token);
+    return this.roomsService.kickMember(inviteCode, dto, token);
   }
 }

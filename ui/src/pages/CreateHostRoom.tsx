@@ -24,7 +24,8 @@ const CreateHostRoom: React.FC = () => {
       );
       console.log("Room created:", response.data);
       // 部屋作成成功時にHostRoomページへ遷移（roomIdをURLに含める）
-      navigate(`/host-room/${response.data.roomId}`);
+      // navigate using inviteCode (server returns inviteCode)
+      navigate(`/host-room/${response.data.inviteCode}`);
       setError("");
     } catch (err: any) {
       setError(err.response?.data?.message || "部屋の作成に失敗しました");

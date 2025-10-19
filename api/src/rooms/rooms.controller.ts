@@ -5,7 +5,6 @@ import {
   Param,
   Get,
   Headers,
-  UnauthorizedException,
   UseGuards,
   Req,
 } from "@nestjs/common";

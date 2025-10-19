@@ -19,7 +19,13 @@ import { TokenService } from "../token/token.service";
   },
 })
 export class RoomsGateway {
-  // プレイヤーが完了ボタンを押したとき
+  /**
+   * プレイヤーが描画送信ボタンを押したとき
+   *
+   * @param data
+   * @param client
+   * @returns
+   */
   @SubscribeMessage("complete")
   handleComplete(
     @MessageBody() data: { roomId: string },
@@ -31,7 +37,13 @@ export class RoomsGateway {
     this.server.to(data.roomId).emit("memberCompleted", uuid);
   }
 
-  // プレイヤーが送信取り消しボタンを押したとき
+  /**
+   * プレイヤーが描画送信キャンセルボタンを押したとき
+   *
+   * @param data
+   * @param client
+   * @returns
+   */
   @SubscribeMessage("cancelComplete")
   handleCancelComplete(
     @MessageBody() data: { roomId: string },
@@ -49,7 +61,13 @@ export class RoomsGateway {
     private readonly tokenService: TokenService
   ) {}
 
-  // クライアントが部屋にjoin
+  /**
+   * クライアントが入室したとき
+   *
+   * @param data
+   * @param client
+   * @returns
+   */
   @SubscribeMessage("join")
   handleJoin(
     @MessageBody() data: { roomId: string },
@@ -61,7 +79,13 @@ export class RoomsGateway {
     this.emitRoomState(data.roomId);
   }
 
-  // クライアントが部屋からleave
+  /**
+   * クライアントが退室したとき
+   *
+   * @param data
+   * @param client
+   * @returns
+   */
   @SubscribeMessage("leave")
   handleLeave(
     @MessageBody() data: { roomId: string },
@@ -73,7 +97,12 @@ export class RoomsGateway {
     this.emitRoomState(data.roomId);
   }
 
-  // 接続時に JWT を検証して client.data.uuid に保存する
+  /**
+   * 接続時に JWT を検証して client.data.uuid に保存する
+   *
+   * @param client
+   * @returns
+   */
   async handleConnection(client: Socket) {
     try {
       const token = (client.handshake?.auth as any)?.token as
@@ -94,12 +123,21 @@ export class RoomsGateway {
     }
   }
 
-  // 部屋状態を全員に通知
+  /**
+   * 部屋状態を全員に通知する
+   *
+   * @param roomId
+   */
   emitRoomState(roomId: string) {
     const room = this.roomsService.getRoom(roomId);
     this.server.to(roomId).emit("roomState", room);
   }
 
+  /**
+   * 部屋の状態が変更されたとき
+   *
+   * @param roomId
+   */
   @OnEvent("room.stateChanged")
   handleRoomStateChanged(roomId: string) {
     this.emitRoomState(roomId);

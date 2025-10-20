@@ -7,11 +7,13 @@ import {
   Headers,
   UseGuards,
   Req,
+  Patch,
 } from "@nestjs/common";
 import { KickRoomDto } from "./dto/kick-room.dto";
 import { CreateRoomDto } from "./dto/create-room.dto";
 import { JoinRoomDto } from "./dto/join-room.dto";
 import { JoinByInviteDto } from "./dto/join-by-invite.dto";
+import { UpdateRoomDto } from "./dto/update-room.dto";
 import { RoomsService } from "./rooms.service";
 import { TokenGuard } from "../common/guards/token.guard";
 import { Request } from "express";
@@ -103,5 +105,20 @@ export class RoomsController {
   ) {
     const token = auth?.replace(/^Bearer\s+/i, "");
     return this.roomsService.kickMember(inviteCode, dto, token);
+  }
+
+  /**
+   * ルームの設定を更新する（最大人数など）
+   */
+  @Patch(":inviteCode")
+  @UseGuards(TokenGuard)
+  updateRoom(
+    @Param("inviteCode") inviteCode: string,
+    @Body() dto: UpdateRoomDto,
+    @Req() req: Request & { uuid?: string },
+    @Headers("authorization") auth?: string
+  ) {
+    const token = auth?.replace(/^Bearer\s+/i, "");
+    return this.roomsService.updateRoom(inviteCode, dto, token);
   }
 }

@@ -103,7 +103,7 @@ const HostRoom: React.FC = () => {
   const inviteLink = React.useMemo(() => {
     if (!roomId) return "";
     // link to guest entry page
-    return `${window.location.origin}/rooms/guest-room-enter/${roomId}`;
+    return `${window.location.origin}/guest-room-enter/${roomId}`;
   }, [roomId]);
 
   const handleCopyLink = async () => {
@@ -255,16 +255,11 @@ const HostRoom: React.FC = () => {
                   key={member.id}
                   className="flex flex-col items-center w-72 max-w-full"
                 >
-                  <div className="w-full text-sm mb-2 text-center font-medium select-none text-blue-600 font-bold">
-                    {member.name}
-                  </div>
-                  <div className="w-full flex justify-center mb-2">
-                    <button
-                      className="text-xs bg-red-500 text-white px-2 py-1 rounded"
-                      onClick={() => handleKick(member)}
-                    >
-                      キック
-                    </button>
+                  <div className="w-full mb-2 flex items-center justify-center gap-2">
+                    <div className="text-sm font-medium select-none text-blue-600 font-bold">
+                      {member.name}
+                    </div>
+                    {/* inline kick button removed; kick is available inside the whiteboard */}
                   </div>
                   <div className="flex w-full h-full items-center justify-center">
                     <div className="border w-56 h-56 aspect-square border-2 border-blue-400 shadow-lg bg-blue-50 flex items-center justify-center">
@@ -274,6 +269,8 @@ const HostRoom: React.FC = () => {
                             ? "star"
                             : "question"
                         }
+                        showKickButton={true}
+                        onKick={() => handleKick(member)}
                       />
                     </div>
                   </div>

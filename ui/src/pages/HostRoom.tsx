@@ -11,8 +11,17 @@ import { FaClipboard, FaCheck } from "react-icons/fa6";
 type Member = { id: string; name?: string; isHost?: boolean; uuid?: string };
 type DecodedJwt = { uuid?: string; exp?: number } & Record<string, any>;
 
-const HostRoom: React.FC = () => {
-  const { inviteCode: roomId } = useParams<{ inviteCode: string }>();
+type HostRoomProps = {
+  roomId?: string;
+  memberId?: string;
+};
+
+const HostRoom: React.FC<HostRoomProps> = ({ roomId: propRoomId }) => {
+  const { roomId: paramRoomId, inviteCode: paramInvite } = useParams<{
+    roomId?: string;
+    inviteCode?: string;
+  }>();
+  const roomId = propRoomId ?? paramRoomId ?? paramInvite ?? "";
   // userJwt cookie から memberId を取得。なければサーバーに新しいトークンをリクエスト
   const [memberId, setMemberId] = React.useState<string>("");
 
@@ -102,8 +111,8 @@ const HostRoom: React.FC = () => {
 
   const inviteLink = React.useMemo(() => {
     if (!roomId) return "";
-    // link to guest entry page
-    return `${window.location.origin}/guest-room-enter/${roomId}`;
+    // link to unified room page
+    return `${window.location.origin}/rooms/${roomId}`;
   }, [roomId]);
 
   const handleCopyLink = async () => {

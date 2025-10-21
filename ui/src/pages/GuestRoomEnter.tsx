@@ -34,7 +34,7 @@ const GuestRoomEnter: React.FC = () => {
       if (response.data?.memberId) {
         setCookie("memberId", response.data.memberId);
       }
-      navigate(`/rooms/guest-room/${roomId}`);
+      navigate(`/rooms/${roomId}`);
     } catch (err: any) {
       setError(err.response?.data?.message || "入室に失敗しました");
     }

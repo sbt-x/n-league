@@ -38,6 +38,22 @@ export function useRoomSocket(roomId: string, memberId: string) {
       auth: { token },
     });
     socketRef.current = socket;
+    // listen for a cross-window event that notifies we just created a DB member
+    const handleJoinedEvent = (e: Event) => {
+      try {
+        const detail = (e as CustomEvent).detail as
+          | { roomId?: string }
+          | undefined;
+        if (!detail) return;
+        const joinedRoomId = detail.roomId;
+        if (joinedRoomId && socketRef.current) {
+          socketRef.current.emit("join", { roomId: joinedRoomId });
+        }
+      } catch (err) {
+        // ignore
+      }
+    };
+    window.addEventListener("joinedRoom", handleJoinedEvent as EventListener);
     // send only inviteCode as roomId; server uses validated uuid from handshake
     socket.emit("join", { roomId });
     socket.on("roomState", (state: RoomState) => {
@@ -55,6 +71,10 @@ export function useRoomSocket(roomId: string, memberId: string) {
     });
     return () => {
       socket.emit("leave", { roomId });
+      window.removeEventListener(
+        "joinedRoom",
+        handleJoinedEvent as EventListener
+      );
       socket.disconnect();
     };
   }, [roomId, memberId]);

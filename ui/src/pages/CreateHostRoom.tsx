@@ -23,9 +23,8 @@ const CreateHostRoom: React.FC = () => {
         { headers: token ? { Authorization: `Bearer ${token}` } : undefined }
       );
       console.log("Room created:", response.data);
-      // 部屋作成成功時にHostRoomページへ遷移（roomIdをURLに含める）
-      // navigate using inviteCode (server returns inviteCode)
-      navigate(`/host-room/${response.data.inviteCode}`);
+      // 部屋作成成功時に統一ルート `/rooms/:roomId` へ遷移
+      navigate(`/rooms/${response.data.inviteCode}`);
       setError("");
     } catch (err: any) {
       setError(err.response?.data?.message || "部屋の作成に失敗しました");

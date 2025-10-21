@@ -12,9 +12,21 @@ import { getCookie, setCookie } from "../utils/cookie";
 import axios from "axios";
 import { jwtDecode } from "jwt-decode";
 
-const GuestRoom: React.FC = () => {
-  const { inviteCode: roomId } = useParams<{ inviteCode: string }>();
-  const [memberId, setMemberId] = useState<string>("");
+type GuestRoomProps = {
+  roomId?: string;
+  memberId?: string;
+};
+
+const GuestRoom: React.FC<GuestRoomProps> = ({
+  roomId: propRoomId,
+  memberId: propMemberId,
+}) => {
+  const { roomId: paramRoomId, inviteCode: paramInvite } = useParams<{
+    roomId?: string;
+    inviteCode?: string;
+  }>();
+  const roomId = propRoomId ?? paramRoomId ?? paramInvite ?? "";
+  const [memberId, setMemberId] = useState<string>(propMemberId ?? "");
   React.useEffect(() => {
     const jwt = getCookie("userJwt");
     if (jwt) {

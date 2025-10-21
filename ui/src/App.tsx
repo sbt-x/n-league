@@ -1,9 +1,7 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Home from "./pages/Home";
-import GuestRoom from "./pages/GuestRoom";
-import GuestRoomEnter from "./pages/GuestRoomEnter";
 import CreateHostRoom from "./pages/CreateHostRoom";
-import HostRoom from "./pages/HostRoom";
+import Room from "./pages/Room";
 import NotFound from "./pages/NotFound";
 
 function App() {
@@ -22,16 +20,9 @@ function App() {
         <main className="bg-gray-100 overflow-auto">
           <Routes>
             <Route path="/" element={<Home />} />
-            <Route
-              path="/rooms/guest-room/:inviteCode"
-              element={<GuestRoom />}
-            />
-            <Route
-              path="/guest-room-enter/:inviteCode"
-              element={<GuestRoomEnter />}
-            />
+            <Route path="/rooms/:roomId" element={<Room />} />
             <Route path="/create-host-room" element={<CreateHostRoom />} />
-            <Route path="/host-room/:inviteCode" element={<HostRoom />} />
+
             <Route path="*" element={<NotFound />} />
           </Routes>
         </main>

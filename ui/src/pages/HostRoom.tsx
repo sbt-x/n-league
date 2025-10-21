@@ -5,12 +5,23 @@ import axios from "axios";
 import { jwtDecode } from "jwt-decode";
 import { useParams } from "react-router-dom";
 import { ReadOnlyWhiteboard } from "../features/whiteboard/ReadOnlyWhiteboard";
+import { IconButton } from "../components/IconButton";
+import { FaClipboard, FaCheck } from "react-icons/fa6";
 
 type Member = { id: string; name?: string; isHost?: boolean; uuid?: string };
 type DecodedJwt = { uuid?: string; exp?: number } & Record<string, any>;
 
-const HostRoom: React.FC = () => {
-  const { inviteCode: roomId } = useParams<{ inviteCode: string }>();
+type HostRoomProps = {
+  roomId?: string;
+  memberId?: string;
+};
+
+const HostRoom: React.FC<HostRoomProps> = ({ roomId: propRoomId }) => {
+  const { roomId: paramRoomId, inviteCode: paramInvite } = useParams<{
+    roomId?: string;
+    inviteCode?: string;
+  }>();
+  const roomId = propRoomId ?? paramRoomId ?? paramInvite ?? "";
   // userJwt cookie から memberId を取得。なければサーバーに新しいトークンをリクエスト
   const [memberId, setMemberId] = React.useState<string>("");
 
@@ -90,18 +101,154 @@ const HostRoom: React.FC = () => {
     [roomId, roomState?.hostId]
   );
 
+  const [copied, setCopied] = React.useState(false);
+  const [editingMax, setEditingMax] = React.useState<number | undefined>(
+    undefined
+  );
+  const [savingMax, setSavingMax] = React.useState(false);
+  const [saveSuccess, setSaveSuccess] = React.useState<string | null>(null);
+  const [saveError, setSaveError] = React.useState<string | null>(null);
+
+  const inviteLink = React.useMemo(() => {
+    if (!roomId) return "";
+    // link to unified room page
+    return `${window.location.origin}/rooms/${roomId}`;
+  }, [roomId]);
+
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(inviteLink);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (e) {
+      console.error("クリップボードへのコピーに失敗しました", e);
+    }
+  };
+
   return (
     <div className="w-full h-full p-4 flex flex-col gap-4">
-      {/* ホスト画面共有エリア - 中央揃え */}
-      <div className="flex justify-center flex-1 flex-grow-2">
-        <div className="bg-gray-200 rounded-lg border-2 border-dashed border-gray-400 flex items-center justify-center w-full max-w-4xl h-full">
-          <div className="text-center">
-            <div className="text-xl font-semibold text-gray-600 mb-2">
-              ホスト画面共有
+      {/* ホスト画面共有エリア - 右側に設定パネルを配置 */}
+      <div className="flex flex-1 flex-grow-2 gap-4">
+        <div className="flex-1 flex justify-center">
+          <div className="bg-gray-200 rounded-lg border-2 border-dashed border-gray-400 flex items-center justify-center w-full max-w-4xl h-full">
+            <div className="text-center">
+              <div className="text-xl font-semibold text-gray-600 mb-2">
+                ホスト画面共有
+              </div>
+              <div className="text-sm text-gray-500">16:9 エリア（準備中）</div>
             </div>
-            <div className="text-sm text-gray-500">16:9 エリア（準備中）</div>
           </div>
         </div>
+
+        {/* 右側設定パネル */}
+        <aside className="w-80">
+          <div className="bg-white rounded-lg border border-gray-300 p-4 h-full flex flex-col gap-3">
+            <div className="text-lg font-semibold">部屋設定</div>
+
+            <div>
+              <div className="text-xs text-gray-500">部屋名</div>
+              <div className="text-sm font-medium text-gray-700 break-words">
+                {roomState?.roomId ?? roomId ?? "-"}
+              </div>
+            </div>
+
+            <div>
+              <div className="text-xs text-gray-500">
+                最大人数（ホスト除く）
+              </div>
+              <div className="flex gap-2 items-center">
+                <input
+                  type="number"
+                  min={2}
+                  max={50}
+                  value={editingMax ?? roomState?.maxPlayers ?? 6}
+                  onChange={(e) => setEditingMax(Number(e.target.value))}
+                  className="w-20 border px-2 py-1 rounded text-sm"
+                />
+                <IconButton
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (!savingMax) {
+                      (async () => {
+                        if (!roomId) return;
+                        const max = editingMax ?? roomState?.maxPlayers;
+                        if (typeof max !== "number") return;
+                        setSavingMax(true);
+                        try {
+                          const token = getCookie("userJwt");
+                          await axios.patch(
+                            `${import.meta.env.VITE_API_URL}/rooms/${roomId}`,
+                            { maxPlayers: max },
+                            {
+                              headers: token
+                                ? { Authorization: `Bearer ${token}` }
+                                : undefined,
+                            }
+                          );
+                          setSaveSuccess("保存しました");
+                          setSaveError(null);
+                          setTimeout(() => setSaveSuccess(null), 2000);
+                          setEditingMax(max);
+                        } catch (e: any) {
+                          console.error(e);
+                          const serverMsg = e?.response?.data?.message;
+                          if (serverMsg) {
+                            setSaveError(serverMsg);
+                          } else {
+                            setSaveError("保存に失敗しました");
+                          }
+                          setSaveSuccess(null);
+                        } finally {
+                          setSavingMax(false);
+                        }
+                      })();
+                    }
+                  }}
+                  className="bg-blue-500 text-white p-2"
+                  border="rounded"
+                  disabled={savingMax}
+                >
+                  <FaCheck />
+                </IconButton>
+                {saveSuccess && (
+                  <div className="text-xs text-green-600">{saveSuccess}</div>
+                )}
+                {saveError && (
+                  <div className="text-xs text-red-600">{saveError}</div>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <div className="text-xs text-gray-500">招待URL</div>
+              <div className="flex gap-2 items-center">
+                <input
+                  readOnly
+                  value={inviteLink}
+                  title={inviteLink}
+                  className="flex-1 border px-2 py-1 rounded text-sm text-gray-700 bg-gray-50 truncate"
+                  style={{ minWidth: 0 }}
+                />
+                <IconButton
+                  onClick={() => handleCopyLink()}
+                  className="bg-blue-500 text-white p-2"
+                  border="rounded"
+                >
+                  <FaClipboard />
+                </IconButton>
+              </div>
+              {copied && (
+                <div className="text-xs text-green-600 mt-1">
+                  コピーしました
+                </div>
+              )}
+            </div>
+
+            <div className="mt-auto text-xs text-gray-400">
+              招待リンクは参加者がゲスト入室ページで使用します
+            </div>
+          </div>
+        </aside>
       </div>
 
       {/* プレイヤーのWhiteboardエリア - 横並び（ホスト+ゲスト） */}
@@ -117,16 +264,11 @@ const HostRoom: React.FC = () => {
                   key={member.id}
                   className="flex flex-col items-center w-72 max-w-full"
                 >
-                  <div className="w-full text-sm mb-2 text-center font-medium select-none text-blue-600 font-bold">
-                    {member.name}
-                  </div>
-                  <div className="w-full flex justify-center mb-2">
-                    <button
-                      className="text-xs bg-red-500 text-white px-2 py-1 rounded"
-                      onClick={() => handleKick(member)}
-                    >
-                      キック
-                    </button>
+                  <div className="w-full mb-2 flex items-center justify-center gap-2">
+                    <div className="text-sm font-medium select-none text-blue-600 font-bold">
+                      {member.name}
+                    </div>
+                    {/* inline kick button removed; kick is available inside the whiteboard */}
                   </div>
                   <div className="flex w-full h-full items-center justify-center">
                     <div className="border w-56 h-56 aspect-square border-2 border-blue-400 shadow-lg bg-blue-50 flex items-center justify-center">
@@ -136,6 +278,8 @@ const HostRoom: React.FC = () => {
                             ? "star"
                             : "question"
                         }
+                        showKickButton={true}
+                        onKick={() => handleKick(member)}
                       />
                     </div>
                   </div>

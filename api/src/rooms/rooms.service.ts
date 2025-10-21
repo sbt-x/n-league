@@ -124,13 +124,16 @@ export class RoomsService {
 
     const host = members.find((m) => m.isHost);
 
+    // Interpret room.maxPlayers as the number of guests allowed (exclude host)
+    const guestCount = members.filter((m) => !m.isHost).length;
+
     return {
       roomId: room.id,
       hostId: host?.id,
       roomName: room.name,
       maxPlayers: room.maxPlayers,
       members,
-      isFull: members.length >= room.maxPlayers,
+      isFull: guestCount >= room.maxPlayers,
     };
   }
 
@@ -148,7 +151,9 @@ export class RoomsService {
     if (!room) throw new NotFoundException("Room not found");
 
     // ルームが定員に達していないか確認する
-    if (room.members.length >= room.maxPlayers) {
+    // Note: room.maxPlayers represents allowed guests (host excluded)
+    const guestMembers = room.members.filter((m: any) => m.role !== Role.host);
+    if (guestMembers.length >= room.maxPlayers) {
       throw new BadRequestException("Room is full");
     }
 
@@ -325,5 +330,49 @@ export class RoomsService {
 
     this.eventEmitter.emit("room.stateChanged", room.id);
     return { success: true, kicked: target.id };
+  }
+
+  /**
+   * ルーム設定を更新する（現状は maxPlayers のみ）
+   */
+  async updateRoom(
+    inviteCode: string,
+    dto: { maxPlayers?: number },
+    token?: string
+  ) {
+    if (!token) throw new BadRequestException("Authorization token required");
+    const uuid = this.verifyUserToken(token);
+    if (!uuid) throw new BadRequestException("Invalid token");
+
+    const room = await this.findRoomByInviteCode(inviteCode);
+    if (!room) throw new NotFoundException("Room not found");
+
+    // verify caller is host
+    const caller = await this.prisma.member.findFirst({
+      where: { roomId: room.id, uuid },
+    });
+    if (!caller || caller.role !== Role.host) {
+      throw new BadRequestException("Only host can update room");
+    }
+
+    const updateData: any = {};
+    if (typeof dto.maxPlayers === "number") {
+      // Ensure we don't set maxPlayers less than the current guest count
+      const guestCount = room.members.filter(
+        (m: any) => m.role !== Role.host
+      ).length;
+      if (dto.maxPlayers < guestCount) {
+        throw new BadRequestException(
+          "maxPlayers cannot be less than current guest count"
+        );
+      }
+      updateData.maxPlayers = dto.maxPlayers;
+    }
+
+    if (Object.keys(updateData).length === 0) return { success: true };
+
+    await this.prisma.room.update({ where: { id: room.id }, data: updateData });
+    this.eventEmitter.emit("room.stateChanged", room.id);
+    return { success: true };
   }
 }

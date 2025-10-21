@@ -27,6 +27,9 @@ const GuestRoom: React.FC<GuestRoomProps> = ({
   }>();
   const roomId = propRoomId ?? paramRoomId ?? paramInvite ?? "";
   const [memberId, setMemberId] = useState<string>(propMemberId ?? "");
+  const [showNameModal, setShowNameModal] = useState(false);
+  const [guestName, setGuestName] = useState("");
+  const [joining, setJoining] = useState(false);
   React.useEffect(() => {
     const jwt = getCookie("userJwt");
     if (jwt) {
@@ -49,8 +52,15 @@ const GuestRoom: React.FC<GuestRoomProps> = ({
         // ignore decode error
       }
     });
+    // show fallback name modal if memberId cookie missing
+    try {
+      const hasMemberCookie = Boolean(getCookie("memberId"));
+      if (!hasMemberCookie) setShowNameModal(true);
+    } catch {
+      // ignore
+    }
   }, []);
-  const { roomState, socket, completedMemberIds } = useRoomSocket(
+  const { roomState, socket, completedMemberIds, getSocket } = useRoomSocket(
     roomId ?? "",
     memberId
   );
@@ -88,6 +98,76 @@ const GuestRoom: React.FC<GuestRoomProps> = ({
 
   return (
     <div className="w-full h-full p-4 flex flex-col gap-4">
+      {/* fallback name-entry modal (shown if Room didn't show it) */}
+      {showNameModal && (
+        <div
+          className="absolute inset-0 flex items-center justify-center z-50"
+          style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+        >
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <h2 className="text-lg font-semibold mb-2">
+              参加者名を入力してください
+            </h2>
+            <p className="text-sm text-gray-500 mb-4">
+              この名前がホワイトボード上に表示されます。
+            </p>
+            <input
+              type="text"
+              value={guestName}
+              onChange={(e) => setGuestName(e.target.value)}
+              placeholder="表示名を入力"
+              className="w-full border px-3 py-2 rounded mb-4"
+            />
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setShowNameModal(false)}
+                disabled={joining}
+                className="px-4 py-2 rounded border"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={async () => {
+                  if (!guestName.trim()) return;
+                  setJoining(true);
+                  try {
+                    const token = getCookie("userJwt");
+                    const headers = token
+                      ? { Authorization: `Bearer ${token}` }
+                      : undefined;
+                    const joinRes = await axios.post(
+                      `${import.meta.env.VITE_API_URL}/rooms/join`,
+                      { inviteCode: roomId, name: guestName.trim() },
+                      { headers }
+                    );
+                    const newMemberId = joinRes.data?.memberId as
+                      | string
+                      | undefined;
+                    if (newMemberId) setCookie("memberId", newMemberId);
+                    setShowNameModal(false);
+                    if (newMemberId) setMemberId(newMemberId);
+                    try {
+                      window.dispatchEvent(
+                        new CustomEvent("joinedRoom", { detail: { roomId } })
+                      );
+                    } catch (e) {
+                      // ignore
+                    }
+                  } catch (e) {
+                    console.error("join failed", e);
+                  } finally {
+                    setJoining(false);
+                  }
+                }}
+                className="px-4 py-2 rounded bg-blue-500 text-white"
+                disabled={joining}
+              >
+                {joining ? "送信中..." : "参加する"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* ホスト画面共有エリア - 中央揃え */}
       <div className="flex justify-center flex-1 flex-grow-2">
         <div className="bg-gray-200 rounded-lg border-2 border-dashed border-gray-400 flex items-center justify-center w-full max-w-4xl h-full">
@@ -150,6 +230,19 @@ const GuestRoom: React.FC<GuestRoomProps> = ({
                         ref={whiteboardRef}
                         isReadOnly={isSent}
                         isDimmed={isSent}
+                        onStrokeComplete={(stroke) => {
+                          const activeSocket = getSocket ? getSocket() : socket;
+                          if (activeSocket && roomId) {
+                            try {
+                              activeSocket.emit("draw:stroke", {
+                                roomId,
+                                stroke,
+                              });
+                            } catch (e) {
+                              // ignore emit errors
+                            }
+                          }
+                        }}
                       />
                     ) : (
                       <ReadOnlyWhiteboard
@@ -181,7 +274,22 @@ const GuestRoom: React.FC<GuestRoomProps> = ({
                           </IconButton>
                           <IconButton
                             onClick={() => {
+                              // clear local canvas
                               whiteboardRef.current?.clear();
+                              // notify host via socket to clear this member's remote strokes
+                              const activeSocket = getSocket
+                                ? getSocket()
+                                : socket;
+                              if (activeSocket && roomId) {
+                                try {
+                                  activeSocket.emit("canvas:clear", {
+                                    roomId,
+                                    authorId: memberId,
+                                  });
+                                } catch (e) {
+                                  // ignore
+                                }
+                              }
                             }}
                             className="bg-red-500 hover:bg-red-600 text-white w-12 h-12 text-lg font-bold shadow-lg transition-all hover:scale-110"
                             border="square"

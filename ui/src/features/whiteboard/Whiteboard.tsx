@@ -7,6 +7,7 @@ export type WhiteboardProps = {
   showToolbar?: boolean;
   isReadOnly?: boolean;
   isDimmed?: boolean;
+  onStrokeComplete?: (stroke: any) => void;
 };
 
 export type WhiteboardHandle = {
@@ -14,7 +15,15 @@ export type WhiteboardHandle = {
 };
 
 export const Whiteboard = forwardRef<WhiteboardHandle, WhiteboardProps>(
-  ({ showToolbar = false, isReadOnly = false, isDimmed = false }, ref) => {
+  (
+    {
+      showToolbar = false,
+      isReadOnly = false,
+      isDimmed = false,
+      onStrokeComplete,
+    },
+    ref
+  ) => {
     const { tool, setTool, color, setColor, width, setWidth } = useTool();
     const canvasRef = React.useRef<{ clear: () => void }>(null);
 
@@ -48,6 +57,7 @@ export const Whiteboard = forwardRef<WhiteboardHandle, WhiteboardProps>(
             width={width}
             isReadOnly={isReadOnly}
             isDimmed={isDimmed}
+            onStrokeComplete={onStrokeComplete}
           />
         </div>
       </div>

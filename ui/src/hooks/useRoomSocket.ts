@@ -8,6 +8,8 @@ export interface RoomState {
   hostId: string;
   hostName: string;
   maxPlayers?: number;
+  // how/when players' answers should be revealed to others
+  revealMode?: "realtime" | "onDecision";
   members: Array<{ id: string; name: string; isHost: boolean; uuid?: string }>;
   isFull?: boolean;
   meId?: string;
@@ -79,5 +81,13 @@ export function useRoomSocket(roomId: string, memberId: string) {
     };
   }, [roomId, memberId]);
 
-  return { roomState, socket: socketRef.current, completedMemberIds };
+  // provide a getter to access the latest socket (socketRef.current may change
+  // without re-rendering consumers). Keep backward-compatible `socket` field
+  // (may be null on first render) and add `getSocket()` for robust access.
+  return {
+    roomState,
+    socket: socketRef.current,
+    completedMemberIds,
+    getSocket: () => socketRef.current,
+  };
 }

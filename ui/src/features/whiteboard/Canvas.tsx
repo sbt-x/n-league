@@ -17,6 +17,7 @@ type CanvasProps = {
   onUndo?: () => void;
   isReadOnly?: boolean;
   isDimmed?: boolean;
+  onStrokeComplete?: (stroke: Stroke) => void;
 };
 
 export type CanvasHandle = {
@@ -24,7 +25,17 @@ export type CanvasHandle = {
 };
 
 export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
-  ({ tool, color, width, isReadOnly = false, isDimmed = false }, ref) => {
+  (
+    {
+      tool,
+      color,
+      width,
+      isReadOnly = false,
+      isDimmed = false,
+      onStrokeComplete,
+    },
+    ref
+  ) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     // オフスクリーンキャンバスで既存ストロークをキャッシュ
@@ -231,6 +242,13 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
       const y = e.clientY - rect.top;
 
       startDrawing({ x, y });
+      // capture the pointer so we keep receiving pointer events even if the pointer
+      // moves outside the canvas element
+      try {
+        (canvas as HTMLCanvasElement).setPointerCapture?.(e.pointerId);
+      } catch (err) {
+        // ignore if unsupported
+      }
     }
 
     function handlePointerMove(e: React.PointerEvent) {
@@ -259,7 +277,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
       }
     }
 
-    function handlePointerUp() {
+    function handlePointerUp(e: React.PointerEvent) {
       if (isReadOnly) return;
 
       // クリーンアップ
@@ -267,23 +285,63 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
         cancelAnimationFrame(rafIdRef.current);
         rafIdRef.current = null;
       }
-      endDrawing();
+      const finished = endDrawing();
+      // release pointer capture if present
+      try {
+        const canvas = canvasRef.current;
+        if (
+          canvas &&
+          e?.pointerId &&
+          (canvas as HTMLCanvasElement).releasePointerCapture
+        ) {
+          (canvas as HTMLCanvasElement).releasePointerCapture(e.pointerId);
+        }
+      } catch (err) {
+        // ignore
+      }
+      if (finished && typeof onStrokeComplete === "function") {
+        try {
+          onStrokeComplete(finished as Stroke);
+        } catch (err) {
+          // ignore
+        }
+      }
     }
 
     function handlePointerEnter() {
       setIsHovered(true);
     }
 
-    function handlePointerLeave() {
+    function handlePointerLeave(e: React.PointerEvent) {
       setIsHovered(false);
       setCursorPosition(null);
-      // ポインターがcanvas外に出たら描画終了
+      // ポインターがcanvas外に出たら描画終了し、終了ストロークを親に通知
       if (isDrawing) {
         if (rafIdRef.current !== null) {
           cancelAnimationFrame(rafIdRef.current);
           rafIdRef.current = null;
         }
-        endDrawing();
+        const finished = endDrawing();
+        if (finished && typeof onStrokeComplete === "function") {
+          try {
+            onStrokeComplete(finished as Stroke);
+          } catch (err) {
+            // ignore
+          }
+        }
+        // release pointer capture if present
+        try {
+          const canvas = canvasRef.current;
+          if (
+            canvas &&
+            e?.pointerId &&
+            (canvas as HTMLCanvasElement).releasePointerCapture
+          ) {
+            (canvas as HTMLCanvasElement).releasePointerCapture(e.pointerId);
+          }
+        } catch (err) {
+          // ignore
+        }
       }
     }
 

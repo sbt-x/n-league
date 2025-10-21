@@ -55,10 +55,12 @@ export function useDraw({ tool, color, width }: UseDrawOptions) {
     });
   }, []);
 
-  // 描画終了
+  // 描画終了 - 完了したストロークを返す
   const endDrawing = useCallback(() => {
+    const finished = currentStroke.current;
     currentStroke.current = null;
     setIsDrawing(false);
+    return finished ?? null;
   }, []);
 
   // キャンバスをクリア

@@ -201,6 +201,7 @@ export class RoomsService {
 
     return {
       memberId: createdMember.id,
+      memberUuid: createdMember.uuid,
       isHost: createdMember.role === Role.host,
     };
   }

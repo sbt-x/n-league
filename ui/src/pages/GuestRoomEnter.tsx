@@ -30,10 +30,9 @@ const GuestRoomEnter: React.FC = () => {
         }
       );
       setError("");
-      // memberIdをcookieに保存
-      if (response.data?.memberId) {
-        setCookie("memberId", response.data.memberId);
-      }
+      // server may return memberUuid (preferred) or memberId
+      const memberUuid = response.data?.memberUuid ?? response.data?.memberId;
+      if (memberUuid) setCookie("memberId", memberUuid);
       navigate(`/rooms/${roomId}`);
     } catch (err: any) {
       setError(err.response?.data?.message || "入室に失敗しました");

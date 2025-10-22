@@ -31,17 +31,36 @@ const GuestRoom: React.FC<GuestRoomProps> = ({
   const [guestName, setGuestName] = useState("");
   const [joining, setJoining] = useState(false);
   React.useEffect(() => {
+    // Prefer an existing per-device memberId cookie (created when joining as guest
+    // without a server-issued JWT). If present, use it and don't overwrite with
+    // a freshly issued token which would change the user's identity.
+    try {
+      const memberCookie = getCookie("memberId");
+      if (memberCookie) {
+        setMemberId(memberCookie);
+        return;
+      }
+    } catch {
+      // ignore cookie read errors
+    }
+
+    // If no member cookie, try to use any existing JWT (already issued) so the
+    // token's uuid becomes our memberId.
     const jwt = getCookie("userJwt");
     if (jwt) {
       try {
         const decoded: any = jwtDecode(jwt);
-        setMemberId(decoded.uuid);
-        return;
+        if (decoded?.uuid) {
+          setMemberId(decoded.uuid);
+          return;
+        }
       } catch {
-        // 取得できなかった場合はトークンを再取得
+        // fall through to request a token
       }
     }
-    // 初回アクセスまたは不正な JWT の場合は API から JWT を取得
+
+    // No cookie and no valid JWT -> request a token from the server and use its
+    // uuid as our memberId (this creates a persistent identity for sockets).
     axios.get(`${import.meta.env.VITE_API_URL}/token`).then((res) => {
       const token = res.data as string;
       setCookie("userJwt", token);
@@ -52,18 +71,34 @@ const GuestRoom: React.FC<GuestRoomProps> = ({
         // ignore decode error
       }
     });
-    // show fallback name modal if memberId cookie missing
-    try {
-      const hasMemberCookie = Boolean(getCookie("memberId"));
-      if (!hasMemberCookie) setShowNameModal(true);
-    } catch {
-      // ignore
-    }
+
+    // If we reached here there was no member cookie; show the fallback name modal
+    // only after the membership check against the room completes (see effect
+    // below). As a quick fallback, set the modal visible so a user without any
+    // identity can enter a name immediately.
+    setShowNameModal(true);
   }, []);
+
   const { roomState, socket, completedMemberIds, getSocket } = useRoomSocket(
     roomId ?? "",
     memberId
   );
+  // If roomState becomes available, check whether the current memberId (from
+  // cookie or token) is already a member of this room. If not, show the name
+  // entry modal so the user can be created/added in this room.
+  React.useEffect(() => {
+    if (!roomState) return;
+    // if we don't yet have any local id, keep the modal open
+    if (!memberId) {
+      setShowNameModal(true);
+      return;
+    }
+    const exists = roomState.members.some((m: any) => {
+      const ident = (m as any).uuid ?? m.id;
+      return ident === memberId;
+    });
+    setShowNameModal(!exists);
+  }, [roomState, memberId]);
   // Hostを除外したメンバーリスト
   const members = roomState ? roomState.members.filter((m) => !m.isHost) : [];
   const meId = memberId;
@@ -173,12 +208,12 @@ const GuestRoom: React.FC<GuestRoomProps> = ({
                       { inviteCode: roomId, name: guestName.trim() },
                       { headers }
                     );
-                    const newMemberId = joinRes.data?.memberId as
-                      | string
-                      | undefined;
-                    if (newMemberId) setCookie("memberId", newMemberId);
+                    // server now returns memberUuid to uniquely identify the client
+                    const newMemberUuid =
+                      joinRes.data?.memberUuid ?? joinRes.data?.memberId;
+                    if (newMemberUuid) setCookie("memberId", newMemberUuid);
                     setShowNameModal(false);
-                    if (newMemberId) setMemberId(newMemberId);
+                    if (newMemberUuid) setMemberId(newMemberUuid);
                     try {
                       window.dispatchEvent(
                         new CustomEvent("joinedRoom", { detail: { roomId } })

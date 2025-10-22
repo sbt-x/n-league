@@ -6,7 +6,7 @@ import { IconButton } from "../components/IconButton";
 import { FaCheck, FaTrash } from "react-icons/fa";
 import { TbCancel } from "react-icons/tb";
 import { useRoomSocket } from "../hooks/useRoomSocket";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 
 import { getCookie, setCookie } from "../utils/cookie";
 import axios from "axios";
@@ -85,6 +85,10 @@ const GuestRoom: React.FC<GuestRoomProps> = ({
     roomId ?? "",
     memberId
   );
+  const navigate = useNavigate();
+  // track whether this client was ever observed as a member in the room
+  const wasMemberRef = React.useRef(false);
+  const [isKicked, setIsKicked] = useState(false);
   // If roomState becomes available, check whether the current memberId (from
   // cookie or token) is already a member of this room. If not, show the name
   // entry modal so the user can be created/added in this room.
@@ -101,6 +105,18 @@ const GuestRoom: React.FC<GuestRoomProps> = ({
       const ident = (m as any).uuid ?? m.id;
       return ident === memberId;
     });
+
+    // detect if we were previously a member but now removed -> kicked
+    if (wasMemberRef.current && !exists) {
+      setIsKicked(true);
+      // don't show the name-entry modal when kicked; instead show kicked UI
+      setShowNameModal(false);
+      return;
+    }
+
+    // update wasMember flag when we observe the member present
+    if (exists) wasMemberRef.current = true;
+
     // If the current memberId is found among the room members, hide the
     // fallback modal; otherwise show it so the user can join this room.
     setShowNameModal(!exists);
@@ -181,6 +197,37 @@ const GuestRoom: React.FC<GuestRoomProps> = ({
 
   return (
     <div className="w-full h-full p-4 flex flex-col gap-4">
+      {/* kicked modal: shown when server removed this member from room */}
+      {isKicked && (
+        <div
+          className="absolute inset-0 flex items-center justify-center z-50"
+          style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+        >
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <h2 className="text-lg font-semibold mb-2">
+              ルームから退出しました
+            </h2>
+            <p className="text-sm text-gray-500 mb-4">
+              ホストによってルームから削除されました。ホームへ戻ります。
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => {
+                  try {
+                    // navigate to home route
+                    navigate("/");
+                  } catch (e) {
+                    window.location.href = "/";
+                  }
+                }}
+                className="px-4 py-2 rounded bg-blue-500 text-white"
+              >
+                ホームへ戻る
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* fallback name-entry modal (shown if Room didn't show it) */}
       {showNameModal && (
         <div

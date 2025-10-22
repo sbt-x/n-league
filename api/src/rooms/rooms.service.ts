@@ -101,7 +101,9 @@ export class RoomsService {
       hostId: hostMember.id,
       inviteCode,
     };
-    this.eventEmitter.emit("room.stateChanged", roomId);
+    // emit using inviteCode so websocket gateway can lookup and broadcast to
+    // the same room clients joined (clients join by inviteCode)
+    this.eventEmitter.emit("room.stateChanged", inviteCode);
     return result;
   }
 
@@ -197,7 +199,8 @@ export class RoomsService {
 
     // emit state changed so gateways fetch fresh state from DB
     // emit using canonical room id
-    this.eventEmitter.emit("room.stateChanged", room.id);
+    // notify listeners using inviteCode (clients are joined by inviteCode)
+    this.eventEmitter.emit("room.stateChanged", inviteCode);
 
     return {
       memberId: createdMember.id,
@@ -254,7 +257,8 @@ export class RoomsService {
         } catch (e: any) {}
       }
     }
-    this.eventEmitter.emit("room.stateChanged", room.id);
+    // use inviteCode to notify websocket gateway
+    this.eventEmitter.emit("room.stateChanged", inviteCode);
     return { success: true };
   }
 
@@ -329,7 +333,8 @@ export class RoomsService {
       }
     }
 
-    this.eventEmitter.emit("room.stateChanged", room.id);
+    // notify via inviteCode so gateway can emit to the joined sockets
+    this.eventEmitter.emit("room.stateChanged", inviteCode);
     return { success: true, kicked: target.id };
   }
 

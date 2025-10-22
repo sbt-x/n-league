@@ -7,20 +7,42 @@ export type WhiteboardProps = {
   showToolbar?: boolean;
   isReadOnly?: boolean;
   isDimmed?: boolean;
+  onStrokeComplete?: (stroke: any) => void;
+  initialStrokes?: any[];
 };
 
 export type WhiteboardHandle = {
   clear: () => void;
+  loadStrokes?: (s: any[]) => void;
 };
 
 export const Whiteboard = forwardRef<WhiteboardHandle, WhiteboardProps>(
-  ({ showToolbar = false, isReadOnly = false, isDimmed = false }, ref) => {
+  (
+    {
+      showToolbar = false,
+      isReadOnly = false,
+      isDimmed = false,
+      onStrokeComplete,
+      initialStrokes,
+    },
+    ref
+  ) => {
     const { tool, setTool, color, setColor, width, setWidth } = useTool();
-    const canvasRef = React.useRef<{ clear: () => void }>(null);
+    const canvasRef = React.useRef<{
+      clear: () => void;
+      loadStrokes?: (s: any[]) => void;
+    }>(null);
 
     useImperativeHandle(ref, () => ({
       clear: () => {
         canvasRef.current?.clear();
+      },
+      loadStrokes: (s: any[]) => {
+        try {
+          canvasRef.current?.loadStrokes?.(s ?? []);
+        } catch (e) {
+          // ignore
+        }
       },
     }));
 
@@ -48,6 +70,8 @@ export const Whiteboard = forwardRef<WhiteboardHandle, WhiteboardProps>(
             width={width}
             isReadOnly={isReadOnly}
             isDimmed={isDimmed}
+            onStrokeComplete={onStrokeComplete}
+            initialStrokes={initialStrokes}
           />
         </div>
       </div>

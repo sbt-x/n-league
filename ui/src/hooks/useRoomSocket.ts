@@ -8,6 +8,8 @@ export interface RoomState {
   hostId: string;
   hostName: string;
   maxPlayers?: number;
+  // how/when players' answers should be revealed to others
+  revealMode?: "realtime" | "onDecision";
   members: Array<{ id: string; name: string; isHost: boolean; uuid?: string }>;
   isFull?: boolean;
   meId?: string;
@@ -57,7 +59,16 @@ export function useRoomSocket(roomId: string, memberId: string) {
     // send only inviteCode as roomId; server uses validated uuid from handshake
     socket.emit("join", { roomId });
     socket.on("roomState", (state: RoomState) => {
+      // roomState from server may include completedMembers (UUIDs) - merge into client state
+      // Note: RoomState type in this file doesn't declare completedMembers to avoid tight coupling with server types
+      const anyState = state as any;
       setRoomState({ ...state, meId: memberId });
+      if (
+        anyState?.completedMembers &&
+        Array.isArray(anyState.completedMembers)
+      ) {
+        setCompletedMemberIds(anyState.completedMembers as string[]);
+      }
     });
     socket.on("memberCompleted", (completedId: string) => {
       console.log("memberCompleted received:", completedId);
@@ -79,5 +90,13 @@ export function useRoomSocket(roomId: string, memberId: string) {
     };
   }, [roomId, memberId]);
 
-  return { roomState, socket: socketRef.current, completedMemberIds };
+  // provide a getter to access the latest socket (socketRef.current may change
+  // without re-rendering consumers). Keep backward-compatible `socket` field
+  // (may be null on first render) and add `getSocket()` for robust access.
+  return {
+    roomState,
+    socket: socketRef.current,
+    completedMemberIds,
+    getSocket: () => socketRef.current,
+  };
 }

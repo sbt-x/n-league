@@ -77,6 +77,56 @@ const HostRoom: React.FC<HostRoomProps> = ({ roomId: propRoomId }) => {
     roomId ?? "",
     memberId
   );
+  const { getSocket } = useRoomSocket(roomId ?? "", memberId);
+  const [remoteStrokes, setRemoteStrokes] = React.useState<
+    Record<string, any[]>
+  >({});
+
+  React.useEffect(() => {
+    const sock = getSocket ? getSocket() : null;
+    if (!sock) return;
+
+    function handleDrawBroadcast(payload: { authorId?: string; stroke: any }) {
+      const author = payload?.authorId ?? "unknown";
+      setRemoteStrokes((prev) => {
+        const copy = { ...prev };
+        if (!copy[author]) copy[author] = [];
+        copy[author] = [...copy[author], payload.stroke];
+        return copy;
+      });
+    }
+
+    function handleCanvasSync(payload: {
+      strokesByAuthor?: Record<string, any[]>;
+    }) {
+      if (!payload || !payload.strokesByAuthor) return;
+      setRemoteStrokes(payload.strokesByAuthor);
+    }
+
+    function handleCanvasClear(payload: { authorId?: string }) {
+      if (!payload || !payload.authorId) return;
+      const author = payload.authorId;
+      setRemoteStrokes((prev) => {
+        const copy = { ...prev };
+        copy[author] = [];
+        return copy;
+      });
+    }
+
+    sock.on("draw:broadcast", handleDrawBroadcast);
+    sock.on("canvas:sync:state", handleCanvasSync);
+    sock.on("canvas:clear", handleCanvasClear);
+
+    // request current canvas state for this room
+    try {
+      sock.emit("canvas:sync:request", { roomId });
+    } catch (e) {}
+
+    return () => {
+      sock.off("draw:broadcast", handleDrawBroadcast);
+      sock.off("canvas:sync:state", handleCanvasSync);
+    };
+  }, [getSocket, roomId]);
 
   // Hostを含む全メンバーリスト
   const members = roomState ? roomState.members : [];
@@ -108,6 +158,11 @@ const HostRoom: React.FC<HostRoomProps> = ({ roomId: propRoomId }) => {
   const [savingMax, setSavingMax] = React.useState(false);
   const [saveSuccess, setSaveSuccess] = React.useState<string | null>(null);
   const [saveError, setSaveError] = React.useState<string | null>(null);
+  // reveal mode: "realtime" = players' answers show immediately,
+  // "onDecision" = shown when host presses decision button
+  const [editingRevealMode, setEditingRevealMode] = React.useState<
+    "realtime" | "onDecision" | undefined
+  >(undefined);
 
   const inviteLink = React.useMemo(() => {
     if (!roomId) return "";
@@ -124,6 +179,37 @@ const HostRoom: React.FC<HostRoomProps> = ({ roomId: propRoomId }) => {
       console.error("クリップボードへのコピーに失敗しました", e);
     }
   };
+
+  // revealMode is a host-local preference; persist in localStorage per room
+  React.useEffect(() => {
+    // initialize from localStorage when roomId changes
+    try {
+      if (!roomId) return;
+      const key = `revealMode:${roomId}`;
+      const stored = localStorage.getItem(key);
+      if (stored === "realtime" || stored === "onDecision") {
+        setEditingRevealMode(stored);
+      }
+    } catch (e) {
+      // ignore localStorage errors
+    }
+  }, [roomId]);
+
+  const handleChangeRevealMode = React.useCallback(
+    (mode: "realtime" | "onDecision") => {
+      if (!roomId) return;
+      setEditingRevealMode(mode);
+      try {
+        const key = `revealMode:${roomId}`;
+        localStorage.setItem(key, mode);
+        setSaveError(null);
+      } catch (e: any) {
+        console.error("failed to save revealMode to localStorage", e);
+        setSaveError("設定の保存に失敗しました");
+      }
+    },
+    [roomId]
+  );
 
   return (
     <div className="w-full h-full p-4 flex flex-col gap-4">
@@ -149,6 +235,45 @@ const HostRoom: React.FC<HostRoomProps> = ({ roomId: propRoomId }) => {
               <div className="text-xs text-gray-500">部屋名</div>
               <div className="text-sm font-medium text-gray-700 break-words">
                 {roomState?.roomId ?? roomId ?? "-"}
+              </div>
+            </div>
+
+            <div>
+              <div className="text-xs text-gray-500">回答の公開タイミング</div>
+              <div className="flex flex-col gap-2 text-sm">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="revealMode"
+                    value="realtime"
+                    checked={
+                      (editingRevealMode ??
+                        roomState?.revealMode ??
+                        "realtime") === "realtime"
+                    }
+                    onChange={() => handleChangeRevealMode("realtime")}
+                  />
+                  <span className="text-sm">リアルタイム</span>
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="revealMode"
+                    value="onDecision"
+                    checked={
+                      (editingRevealMode ??
+                        roomState?.revealMode ??
+                        "realtime") === "onDecision"
+                    }
+                    onChange={() => handleChangeRevealMode("onDecision")}
+                  />
+                  <span className="text-sm">送信後</span>
+                </label>
+                <div className="min-h-[1rem]">
+                  {saveError ? (
+                    <div className="text-xs text-red-600">{saveError}</div>
+                  ) : null}
+                </div>
               </div>
             </div>
 
@@ -259,6 +384,14 @@ const HostRoom: React.FC<HostRoomProps> = ({ roomId: propRoomId }) => {
             .filter((m) => !m.isHost)
             .map((member) => {
               const memberIdent = (member as any).uuid ?? member.id;
+              const effectiveRevealMode =
+                editingRevealMode ?? roomState?.revealMode ?? "realtime";
+              const hasSubmitted = completedMemberIds.includes(memberIdent);
+              // When reveal mode is "onDecision" (送信後), only show strokes after submission
+              const strokesToShow =
+                effectiveRevealMode === "onDecision" && !hasSubmitted
+                  ? []
+                  : (remoteStrokes[memberIdent] ?? []);
               return (
                 <div
                   key={member.id}
@@ -273,13 +406,10 @@ const HostRoom: React.FC<HostRoomProps> = ({ roomId: propRoomId }) => {
                   <div className="flex w-full h-full items-center justify-center">
                     <div className="border w-56 h-56 aspect-square border-2 border-blue-400 shadow-lg bg-blue-50 flex items-center justify-center">
                       <ReadOnlyWhiteboard
-                        mode={
-                          completedMemberIds.includes(memberIdent)
-                            ? "star"
-                            : "question"
-                        }
+                        mode={hasSubmitted ? "star" : "question"}
                         showKickButton={true}
                         onKick={() => handleKick(member)}
+                        strokes={strokesToShow}
                       />
                     </div>
                   </div>

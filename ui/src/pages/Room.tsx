@@ -1,6 +1,6 @@
 import React from "react";
 import axios from "axios";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { getCookie, setCookie } from "../utils/cookie";
 import { jwtDecode } from "jwt-decode";
 import HostRoom from "./HostRoom";
@@ -9,6 +9,7 @@ import GuestRoom from "./GuestRoom";
 const Room: React.FC = () => {
   const { roomId: paramRoomId } = useParams<{ roomId?: string }>();
   const roomId = paramRoomId ?? "";
+  const navigate = useNavigate();
   const [memberId, setMemberId] = React.useState<string | null>(null);
   const [isHost, setIsHost] = React.useState<boolean | null>(null);
   const [loading, setLoading] = React.useState(true);
@@ -66,6 +67,11 @@ const Room: React.FC = () => {
           }
         }
       } catch (e) {
+        // If server returns 404, navigate to NotFound page.
+        if (axios.isAxiosError(e) && e.response?.status === 404) {
+          if (mounted) navigate("/404", { replace: true });
+          return;
+        }
         if (mounted) {
           // fallback: assume guest if we failed to fetch
           if (uuid) setMemberId(uuid);

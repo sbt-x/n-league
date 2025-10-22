@@ -10,12 +10,14 @@ export type ReadOnlyWhiteboardProps = {
   showKickButton?: boolean;
   /** キックボタンが押されたときに呼ばれるハンドラ（引数なしでOK） */
   onKick?: () => void;
+  strokes?: Array<any>;
 };
 
 export const ReadOnlyWhiteboard: React.FC<ReadOnlyWhiteboardProps> = ({
   mode = "question",
   showKickButton = false,
   onKick,
+  strokes = [],
 }) => {
   return (
     <div className="relative flex flex-col w-full h-full bg-gray-50">
@@ -37,7 +39,7 @@ export const ReadOnlyWhiteboard: React.FC<ReadOnlyWhiteboardProps> = ({
 
       {/* Canvas領域 */}
       <div className="flex-1 w-full h-full">
-        <ReadOnlyCanvas mode={mode} />
+        <ReadOnlyCanvas mode={mode} strokes={strokes} />
       </div>
     </div>
   );

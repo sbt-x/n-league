@@ -2,10 +2,12 @@ import React, { useRef, useEffect, useState } from "react";
 
 type ReadOnlyCanvasProps = {
   mode?: "question" | "star";
+  strokes?: Array<any>;
 };
 
 export const ReadOnlyCanvas: React.FC<ReadOnlyCanvasProps> = ({
   mode = "question",
+  strokes = [],
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -68,7 +70,29 @@ export const ReadOnlyCanvas: React.FC<ReadOnlyCanvasProps> = ({
       ctx.fill();
       ctx.restore();
     }
-  }, [canvasSize, mode]);
+    // If strokes provided, render them on top of the mode background (simple replay)
+    if (strokes && strokes.length > 0) {
+      strokes.forEach((stroke: any) => {
+        if (!stroke || !stroke.points || stroke.points.length < 1) return;
+        ctx.beginPath();
+        ctx.strokeStyle = stroke.color || "#000";
+        ctx.lineWidth = stroke.width || 2;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        if (stroke.tool === "eraser") {
+          ctx.globalCompositeOperation = "destination-out";
+        } else {
+          ctx.globalCompositeOperation = "source-over";
+        }
+        ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+        for (let i = 1; i < stroke.points.length; i++) {
+          ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
+        }
+        ctx.stroke();
+        ctx.globalCompositeOperation = "source-over";
+      });
+    }
+  }, [canvasSize, mode, strokes]);
 
   return (
     <div className="flex flex-col h-full w-full">

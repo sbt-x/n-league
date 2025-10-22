@@ -81,6 +81,39 @@ const GuestRoom: React.FC<GuestRoomProps> = ({
     setIsSent(true);
   };
 
+  // Sync canvas state for this member when socket becomes available
+  React.useEffect(() => {
+    const activeSocket = getSocket ? getSocket() : socket;
+    if (!activeSocket || !roomId) return;
+
+    function handleCanvasSync(payload: {
+      strokesByAuthor?: Record<string, any[]>;
+    }) {
+      if (!payload || !payload.strokesByAuthor) return;
+      const myKey = memberId ?? "";
+      // server stores strokes by author id; try both uuid and id keys
+      const strokes = payload.strokesByAuthor[myKey] ?? [];
+      try {
+        whiteboardRef.current?.loadStrokes?.(strokes);
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    activeSocket.on("canvas:sync:state", handleCanvasSync);
+
+    // request initial sync
+    try {
+      activeSocket.emit("canvas:sync:request", { roomId });
+    } catch (e) {
+      // ignore
+    }
+
+    return () => {
+      activeSocket.off("canvas:sync:state", handleCanvasSync);
+    };
+  }, [getSocket, socket, roomId, memberId]);
+
   // 送信取り消し
   const handleCancelSend = () => {
     console.log(

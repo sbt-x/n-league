@@ -18,10 +18,13 @@ type CanvasProps = {
   isReadOnly?: boolean;
   isDimmed?: boolean;
   onStrokeComplete?: (stroke: Stroke) => void;
+  /** load initial strokes (e.g. from server) */
+  initialStrokes?: Stroke[];
 };
 
 export type CanvasHandle = {
   clear: () => void;
+  loadStrokes?: (s: Stroke[]) => void;
 };
 
 export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
@@ -33,6 +36,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
       isReadOnly = false,
       isDimmed = false,
       onStrokeComplete,
+      initialStrokes,
     },
     ref
   ) => {
@@ -82,10 +86,12 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
       continueDrawing,
       endDrawing,
       clearCanvas,
+      replaceStrokes,
     } = useDraw({
       tool,
       color,
       width,
+      initialStrokes,
     });
 
     // Canvas rendering effect - 最適化版
@@ -348,6 +354,14 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
     useImperativeHandle(ref, () => ({
       clear: () => {
         clearCanvas();
+      },
+      // allow parent to replace strokes (used when syncing from server)
+      loadStrokes: (s: Stroke[]) => {
+        try {
+          replaceStrokes(s ?? []);
+        } catch (e) {
+          // ignore
+        }
       },
     }));
 

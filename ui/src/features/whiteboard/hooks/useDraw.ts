@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef, useState, useEffect } from "react";
 import type { Point } from "../types/whiteboard";
 import type { Stroke, Tool } from "../types/whiteboard";
 
@@ -6,9 +6,15 @@ interface UseDrawOptions {
   tool: Tool;
   color: string;
   width: number;
+  initialStrokes?: Stroke[];
 }
 
-export function useDraw({ tool, color, width }: UseDrawOptions) {
+export function useDraw({
+  tool,
+  color,
+  width,
+  initialStrokes,
+}: UseDrawOptions) {
   // 描画されたストロークのリスト
   const [strokes, setStrokes] = useState<Stroke[]>([]);
   // 描画中かどうかの状態
@@ -70,6 +76,20 @@ export function useDraw({ tool, color, width }: UseDrawOptions) {
     setIsDrawing(false);
   }, []);
 
+  // allow external replacement/loading of strokes (used for sync on reconnect)
+  const replaceStrokes = useCallback((newStrokes: Stroke[]) => {
+    setStrokes(newStrokes ?? []);
+    currentStroke.current = null;
+    setIsDrawing(false);
+  }, []);
+
+  // initialize from provided initialStrokes when present (e.g., hydration on mount)
+  useEffect(() => {
+    if (initialStrokes && initialStrokes.length > 0) {
+      replaceStrokes(initialStrokes);
+    }
+  }, [initialStrokes, replaceStrokes]);
+
   // Undo機能
   const undo = useCallback(() => {
     setStrokes((prev) => prev.slice(0, -1));
@@ -83,5 +103,7 @@ export function useDraw({ tool, color, width }: UseDrawOptions) {
     endDrawing,
     clearCanvas,
     undo,
+    // allow callers to load/replace strokes
+    replaceStrokes,
   };
 }

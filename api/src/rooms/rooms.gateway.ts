@@ -24,6 +24,9 @@ export class RoomsGateway {
     string,
     Array<{ authorId?: string; stroke: any }>
   > = new Map();
+  // track which members have completed per room (in-memory)
+  // keys are roomId -> Set<uuid>
+  private completedMembers: Map<string, Set<string>> = new Map();
   /**
    * プレイヤーが描画送信ボタンを押したとき
    *
@@ -39,6 +42,14 @@ export class RoomsGateway {
     // サーバで検証済みの uuid を利用して通知
     const uuid = client.data?.uuid as string | undefined;
     if (!uuid) return;
+    // mark completed in-memory
+    try {
+      const set = this.completedMembers.get(data.roomId) ?? new Set<string>();
+      set.add(uuid);
+      this.completedMembers.set(data.roomId, set);
+    } catch (e) {
+      // ignore
+    }
     this.server.to(data.roomId).emit("memberCompleted", uuid);
   }
 
@@ -139,6 +150,16 @@ export class RoomsGateway {
   ) {
     const uuid = client.data?.uuid as string | undefined;
     if (!uuid) return;
+    // remove from completed set
+    try {
+      const set = this.completedMembers.get(data.roomId);
+      if (set) {
+        set.delete(uuid);
+        this.completedMembers.set(data.roomId, set);
+      }
+    } catch (e) {
+      // ignore
+    }
     this.server.to(data.roomId).emit("memberCancelled", uuid);
   }
   @WebSocketServer()
@@ -182,6 +203,16 @@ export class RoomsGateway {
     const uuid = client.data?.uuid as string | undefined;
     if (!uuid) return;
     client.leave(data.roomId);
+    // remove any completed marker for this uuid in this room
+    try {
+      const set = this.completedMembers.get(data.roomId);
+      if (set) {
+        set.delete(uuid);
+        this.completedMembers.set(data.roomId, set);
+      }
+    } catch (e) {
+      // ignore
+    }
     const token = (client.handshake?.auth as any)?.token as string | undefined;
     // persist leave to DB
     this.roomsService.leaveRoom(data.roomId, token).catch(() => {});
@@ -199,6 +230,16 @@ export class RoomsGateway {
     for (const roomId of rooms) {
       try {
         await this.roomsService.leaveRoom(roomId, token);
+        // remove from completed set for this room if present
+        try {
+          const set = this.completedMembers.get(roomId);
+          if (set) {
+            set.delete(uuid);
+            this.completedMembers.set(roomId, set);
+          }
+        } catch (e) {
+          // ignore
+        }
       } catch (e) {
         // ignore errors for now
       }
@@ -239,7 +280,9 @@ export class RoomsGateway {
   async emitRoomState(roomId: string) {
     try {
       const room = await this.roomsService.getRoom(roomId);
-      this.server.to(roomId).emit("roomState", room);
+  // include in-memory completed member UUIDs so clients can initialize
+  const completed = Array.from(this.completedMembers.get(roomId) ?? []);
+  this.server.to(roomId).emit("roomState", { ...room, completedMembers: completed });
     } catch (e) {
       // If room not found or any error occurs while fetching room state,
       // don't let it bubble up. This can happen when emit is triggered with

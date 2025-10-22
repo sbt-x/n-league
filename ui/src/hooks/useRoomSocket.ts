@@ -59,7 +59,13 @@ export function useRoomSocket(roomId: string, memberId: string) {
     // send only inviteCode as roomId; server uses validated uuid from handshake
     socket.emit("join", { roomId });
     socket.on("roomState", (state: RoomState) => {
+      // roomState from server may include completedMembers (UUIDs) - merge into client state
+      // Note: RoomState type in this file doesn't declare completedMembers to avoid tight coupling with server types
+      const anyState = state as any;
       setRoomState({ ...state, meId: memberId });
+      if (anyState?.completedMembers && Array.isArray(anyState.completedMembers)) {
+        setCompletedMemberIds(anyState.completedMembers as string[]);
+      }
     });
     socket.on("memberCompleted", (completedId: string) => {
       console.log("memberCompleted received:", completedId);

@@ -384,6 +384,14 @@ const HostRoom: React.FC<HostRoomProps> = ({ roomId: propRoomId }) => {
             .filter((m) => !m.isHost)
             .map((member) => {
               const memberIdent = (member as any).uuid ?? member.id;
+              const effectiveRevealMode =
+                editingRevealMode ?? roomState?.revealMode ?? "realtime";
+              const hasSubmitted = completedMemberIds.includes(memberIdent);
+              // When reveal mode is "onDecision" (送信後), only show strokes after submission
+              const strokesToShow =
+                effectiveRevealMode === "onDecision" && !hasSubmitted
+                  ? []
+                  : (remoteStrokes[memberIdent] ?? []);
               return (
                 <div
                   key={member.id}
@@ -398,14 +406,10 @@ const HostRoom: React.FC<HostRoomProps> = ({ roomId: propRoomId }) => {
                   <div className="flex w-full h-full items-center justify-center">
                     <div className="border w-56 h-56 aspect-square border-2 border-blue-400 shadow-lg bg-blue-50 flex items-center justify-center">
                       <ReadOnlyWhiteboard
-                        mode={
-                          completedMemberIds.includes(memberIdent)
-                            ? "star"
-                            : "question"
-                        }
+                        mode={hasSubmitted ? "star" : "question"}
                         showKickButton={true}
                         onKick={() => handleKick(member)}
-                        strokes={remoteStrokes[memberIdent] ?? []}
+                        strokes={strokesToShow}
                       />
                     </div>
                   </div>

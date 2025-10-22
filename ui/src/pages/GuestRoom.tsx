@@ -31,52 +31,54 @@ const GuestRoom: React.FC<GuestRoomProps> = ({
   const [guestName, setGuestName] = useState("");
   const [joining, setJoining] = useState(false);
   React.useEffect(() => {
-    // Prefer an existing per-device memberId cookie (created when joining as guest
-    // without a server-issued JWT). If present, use it and don't overwrite with
-    // a freshly issued token which would change the user's identity.
-    try {
-      const memberCookie = getCookie("memberId");
-      if (memberCookie) {
-        setMemberId(memberCookie);
-        return;
-      }
-    } catch {
-      // ignore cookie read errors
-    }
-
-    // If no member cookie, try to use any existing JWT (already issued) so the
-    // token's uuid becomes our memberId.
+    // Determine whether we already have a local identity.
+    // Prefer a server-issued JWT uuid when available so the client's identity
+    // matches socket authentication. Fall back to a per-device `memberId`
+    // cookie only when no valid JWT is present.
+    let hasLocalIdentity = false;
     const jwt = getCookie("userJwt");
     if (jwt) {
       try {
         const decoded: any = jwtDecode(jwt);
         if (decoded?.uuid) {
           setMemberId(decoded.uuid);
-          return;
+          hasLocalIdentity = true;
         }
       } catch {
-        // fall through to request a token
+        // invalid jwt - fall back to member cookie or request a new token
+      }
+    }
+
+    if (!hasLocalIdentity) {
+      try {
+        const memberCookie = getCookie("memberId");
+        if (memberCookie) {
+          setMemberId(memberCookie);
+          hasLocalIdentity = true;
+        }
+      } catch {
+        // ignore cookie read errors
       }
     }
 
     // No cookie and no valid JWT -> request a token from the server and use its
     // uuid as our memberId (this creates a persistent identity for sockets).
-    axios.get(`${import.meta.env.VITE_API_URL}/token`).then((res) => {
-      const token = res.data as string;
-      setCookie("userJwt", token);
-      try {
-        const decoded: any = jwtDecode(token);
-        if (decoded?.uuid) setMemberId(decoded.uuid);
-      } catch {
-        // ignore decode error
-      }
-    });
+    if (!hasLocalIdentity) {
+      axios.get(`${import.meta.env.VITE_API_URL}/token`).then((res) => {
+        const token = res.data as string;
+        setCookie("userJwt", token);
+        try {
+          const decoded: any = jwtDecode(token);
+          if (decoded?.uuid) setMemberId(decoded.uuid);
+        } catch {
+          // ignore decode error
+        }
+      });
 
-    // If we reached here there was no member cookie; show the fallback name modal
-    // only after the membership check against the room completes (see effect
-    // below). As a quick fallback, set the modal visible so a user without any
-    // identity can enter a name immediately.
-    setShowNameModal(true);
+      // If we reached here there was no member cookie or JWT; show the fallback
+      // name modal so a user without any identity can enter a name immediately.
+      setShowNameModal(true);
+    }
   }, []);
 
   const { roomState, socket, completedMemberIds, getSocket } = useRoomSocket(
@@ -89,6 +91,8 @@ const GuestRoom: React.FC<GuestRoomProps> = ({
   React.useEffect(() => {
     if (!roomState) return;
     // if we don't yet have any local id, keep the modal open
+    // Note: memberId may be provided from parent `Room` (UUID from JWT) or
+    // restored from cookie; in that case we shouldn't re-open the modal on reload.
     if (!memberId) {
       setShowNameModal(true);
       return;
@@ -97,6 +101,8 @@ const GuestRoom: React.FC<GuestRoomProps> = ({
       const ident = (m as any).uuid ?? m.id;
       return ident === memberId;
     });
+    // If the current memberId is found among the room members, hide the
+    // fallback modal; otherwise show it so the user can join this room.
     setShowNameModal(!exists);
   }, [roomState, memberId]);
   // Hostを除外したメンバーリスト
@@ -105,6 +111,15 @@ const GuestRoom: React.FC<GuestRoomProps> = ({
   const whiteboardRef = useRef<WhiteboardHandle>(null);
   const [isSent, setIsSent] = useState(false);
   const [isSending, setIsSending] = useState(false);
+
+  // Keep local `isSent` in sync with server state for this member.
+  // This ensures that after a reload, if the server reports this member as
+  // completed, the UI shows the sent/dimmed state instead of the pre-send UI.
+  React.useEffect(() => {
+    if (!memberId) return;
+    const completed = completedMemberIds?.includes(memberId);
+    setIsSent(Boolean(completed));
+  }, [completedMemberIds, memberId]);
 
   // 送信処理
   const handleSend = () => {

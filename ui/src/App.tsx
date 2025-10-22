@@ -1,6 +1,5 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Home from "./pages/Home";
-import CreateHostRoom from "./pages/CreateHostRoom";
 import Room from "./pages/Room";
 import NotFound from "./pages/NotFound";
 
@@ -21,7 +20,6 @@ function App() {
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/rooms/:roomId" element={<Room />} />
-            <Route path="/create-host-room" element={<CreateHostRoom />} />
 
             <Route path="*" element={<NotFound />} />
           </Routes>

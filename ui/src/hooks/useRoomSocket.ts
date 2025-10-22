@@ -63,7 +63,10 @@ export function useRoomSocket(roomId: string, memberId: string) {
       // Note: RoomState type in this file doesn't declare completedMembers to avoid tight coupling with server types
       const anyState = state as any;
       setRoomState({ ...state, meId: memberId });
-      if (anyState?.completedMembers && Array.isArray(anyState.completedMembers)) {
+      if (
+        anyState?.completedMembers &&
+        Array.isArray(anyState.completedMembers)
+      ) {
         setCompletedMemberIds(anyState.completedMembers as string[]);
       }
     });

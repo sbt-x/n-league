@@ -280,9 +280,11 @@ export class RoomsGateway {
   async emitRoomState(roomId: string) {
     try {
       const room = await this.roomsService.getRoom(roomId);
-  // include in-memory completed member UUIDs so clients can initialize
-  const completed = Array.from(this.completedMembers.get(roomId) ?? []);
-  this.server.to(roomId).emit("roomState", { ...room, completedMembers: completed });
+      // include in-memory completed member UUIDs so clients can initialize
+      const completed = Array.from(this.completedMembers.get(roomId) ?? []);
+      this.server
+        .to(roomId)
+        .emit("roomState", { ...room, completedMembers: completed });
     } catch (e) {
       // If room not found or any error occurs while fetching room state,
       // don't let it bubble up. This can happen when emit is triggered with

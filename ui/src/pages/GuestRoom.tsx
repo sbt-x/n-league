@@ -123,6 +123,10 @@ const GuestRoom: React.FC<GuestRoomProps> = ({
   }, [roomState, memberId]);
   // Hostを除外したメンバーリスト
   const members = roomState ? roomState.members.filter((m) => !m.isHost) : [];
+  // normalize phase like HostRoom: default to LOBBY when server omits phase
+  const currentPhase = React.useMemo(() => {
+    return (roomState as any)?.phase ?? "LOBBY";
+  }, [roomState]);
   const meId = memberId;
   const whiteboardRef = useRef<WhiteboardHandle>(null);
   const [isSent, setIsSent] = useState(false);
@@ -137,14 +141,74 @@ const GuestRoom: React.FC<GuestRoomProps> = ({
     setIsSent(Boolean(completed));
   }, [completedMemberIds, memberId]);
 
+  // respond to server-side canvas clear events (clear all and individual)
+  React.useEffect(() => {
+    const activeSocket = getSocket ? getSocket() : socket;
+    if (!activeSocket) return;
+
+    function handleClearAll() {
+      try {
+        whiteboardRef.current?.clear?.();
+      } catch (e) {}
+      // reset sent state
+      setIsSent(false);
+    }
+
+    function handleAnswersLocked() {
+      // if locked, ensure this client is considered sent
+      if (!memberId) return;
+      if (!completedMemberIds.includes(memberId)) {
+        setIsSent(true);
+      }
+    }
+
+    activeSocket.on("canvas:clearAll", handleClearAll);
+    activeSocket.on("answers:locked", handleAnswersLocked);
+
+    return () => {
+      activeSocket.off("canvas:clearAll", handleClearAll);
+      activeSocket.off("answers:locked", handleAnswersLocked);
+    };
+  }, [getSocket, socket, memberId, completedMemberIds]);
+
   // 送信処理
   const handleSend = () => {
-    setIsSending(true);
-    if (socket && roomId) {
-      socket.emit("complete", { roomId });
-    }
-    setIsSending(false);
-    setIsSent(true);
+    (async () => {
+      setIsSending(true);
+      try {
+        // guard: only allow submission during IN_ROUND
+        const currentPhase = (roomState as any)?.phase ?? "LOBBY";
+        if (currentPhase !== "IN_ROUND") {
+          setIsSending(false);
+          return;
+        }
+        // capture PNG snapshot from whiteboard
+        const png = await whiteboardRef.current?.getSnapshot?.(1024);
+        const activeSocket = getSocket ? getSocket() : socket;
+        if (activeSocket && roomId && png) {
+          try {
+            activeSocket.emit("submit-snapshot", {
+              roomId,
+              // include member id so server can map to player
+              playerId: memberId,
+              snapshot: { pngBase64: png, updatedAt: new Date().toISOString() },
+            });
+          } catch (e) {
+            // ignore emit error
+          }
+        }
+
+        if (activeSocket && roomId) {
+          activeSocket.emit("complete", { roomId });
+        }
+
+        setIsSent(true);
+      } catch (e) {
+        console.error("snapshot/send failed", e);
+      } finally {
+        setIsSending(false);
+      }
+    })();
   };
 
   // Sync canvas state for this member when socket becomes available
@@ -301,12 +365,65 @@ const GuestRoom: React.FC<GuestRoomProps> = ({
       {/* ホスト画面共有エリア - 中央揃え */}
       <div className="flex justify-center flex-1 flex-grow-2">
         <div className="bg-gray-200 rounded-lg border-2 border-dashed border-gray-400 flex items-center justify-center w-full max-w-4xl h-full">
-          <div className="text-center">
-            <div className="text-xl font-semibold text-gray-600 mb-2">
-              ホスト画面共有
+          {/* show scoreboard at RESULT phase */}
+          {currentPhase === "RESULT" ? (
+            <div className="p-6 w-full max-w-3xl">
+              <h2 className="text-2xl font-bold text-center mb-4">最終結果</h2>
+              <div className="bg-white rounded-lg p-4 shadow">
+                {(() => {
+                  const scoresMap: Record<string, number> =
+                    (roomState as any)?.scores ?? {};
+                  const membersList = (roomState as any)?.members ?? [];
+                  const entries: any[] = membersList
+                    .filter((m: any) => !m.isHost)
+                    .map((m: any) => {
+                      const uuid = m.uuid ?? m.id;
+                      return {
+                        id: uuid,
+                        name: m.name ?? "参加者",
+                        isHost: m.isHost,
+                        score: scoresMap[uuid] ?? 0,
+                      };
+                    });
+                  entries.sort((a, b) => b.score - a.score);
+                  return (
+                    <ol className="space-y-2">
+                      {entries.map((e: any, idx: number) => (
+                        <li
+                          key={e.id}
+                          className="flex items-center justify-between"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold">
+                              {idx + 1}
+                            </div>
+                            <div>
+                              <div className="text-sm font-medium">
+                                {e.name}
+                              </div>
+                              {e.isHost && (
+                                <div className="text-xs text-gray-400">
+                                  (ホスト)
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-lg font-semibold">{e.score}</div>
+                        </li>
+                      ))}
+                    </ol>
+                  );
+                })()}
+              </div>
             </div>
-            <div className="text-sm text-gray-500">16:9 エリア（準備中）</div>
-          </div>
+          ) : (
+            <div className="text-center">
+              <div className="text-xl font-semibold text-gray-600 mb-2">
+                ホスト画面共有
+              </div>
+              <div className="text-sm text-gray-500">16:9 エリア（準備中）</div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -383,6 +500,20 @@ const GuestRoom: React.FC<GuestRoomProps> = ({
                             ? "star"
                             : "question"
                         }
+                        judgeMode={
+                          (roomState as any)?.rounds?.[
+                            (roomState as any)?.roundIndex ?? 0
+                          ]?.judgments?.[(member as any).uuid ?? member.id] ===
+                          true
+                            ? "correct"
+                            : (roomState as any)?.rounds?.[
+                                  (roomState as any)?.roundIndex ?? 0
+                                ]?.judgments?.[
+                                  (member as any).uuid ?? member.id
+                                ] === false
+                              ? "incorrect"
+                              : null
+                        }
                       />
                     )}
                   </div>
@@ -392,8 +523,11 @@ const GuestRoom: React.FC<GuestRoomProps> = ({
                         <>
                           <IconButton
                             onClick={handleSend}
-                            disabled={isSending}
-                            className={`bg-green-500 hover:bg-green-600 text-white w-12 h-12 text-lg font-bold shadow-lg transition-all ${isSending ? "animate-pulse opacity-70" : "hover:scale-110"}`}
+                            disabled={
+                              isSending ||
+                              (roomState as any)?.phase !== "IN_ROUND"
+                            }
+                            className={`w-12 h-12 text-lg font-bold shadow-lg transition-all ${isSending ? "animate-pulse opacity-70 bg-green-500 text-white" : (roomState as any)?.phase === "IN_ROUND" ? "bg-green-500 hover:bg-green-600 text-white hover:scale-110" : "bg-gray-300 text-gray-600 cursor-not-allowed"}`}
                             border="square"
                           >
                             {isSending ? (
@@ -429,15 +563,21 @@ const GuestRoom: React.FC<GuestRoomProps> = ({
                         </>
                       ) : (
                         <>
-                          <div className="flex flex-col items-center mb-2">
-                            <IconButton
-                              onClick={handleCancelSend}
-                              className="bg-yellow-400 hover:bg-yellow-500 text-white w-12 h-12 text-lg font-bold shadow-lg transition-all hover:scale-110"
-                              border="square"
-                            >
-                              <TbCancel />
-                            </IconButton>
-                          </div>
+                          {/* hide cancel button when answers are locked or during reveal */}
+                          {!(
+                            (roomState as any)?.phase === "LOCKED" ||
+                            (roomState as any)?.phase === "REVEAL"
+                          ) && (
+                            <div className="flex flex-col items-center mb-2">
+                              <IconButton
+                                onClick={handleCancelSend}
+                                className="bg-yellow-400 hover:bg-yellow-500 text-white w-12 h-12 text-lg font-bold shadow-lg transition-all hover:scale-110"
+                                border="square"
+                              >
+                                <TbCancel />
+                              </IconButton>
+                            </div>
+                          )}
                         </>
                       )}
                     </div>

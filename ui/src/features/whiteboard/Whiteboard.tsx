@@ -14,6 +14,7 @@ export type WhiteboardProps = {
 export type WhiteboardHandle = {
   clear: () => void;
   loadStrokes?: (s: any[]) => void;
+  getSnapshot?: (maxSize?: number) => Promise<string | null>;
 };
 
 export const Whiteboard = forwardRef<WhiteboardHandle, WhiteboardProps>(
@@ -31,6 +32,7 @@ export const Whiteboard = forwardRef<WhiteboardHandle, WhiteboardProps>(
     const canvasRef = React.useRef<{
       clear: () => void;
       loadStrokes?: (s: any[]) => void;
+      getSnapshot?: (maxSize?: number) => Promise<string | null>;
     }>(null);
 
     useImperativeHandle(ref, () => ({
@@ -42,6 +44,13 @@ export const Whiteboard = forwardRef<WhiteboardHandle, WhiteboardProps>(
           canvasRef.current?.loadStrokes?.(s ?? []);
         } catch (e) {
           // ignore
+        }
+      },
+      getSnapshot: async (maxSize = 1024) => {
+        try {
+          return (await canvasRef.current?.getSnapshot?.(maxSize)) ?? null;
+        } catch (e) {
+          return null;
         }
       },
     }));

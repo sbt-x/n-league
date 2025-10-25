@@ -3,11 +3,14 @@ import React, { useRef, useEffect, useState } from "react";
 type ReadOnlyCanvasProps = {
   mode?: "question" | "star";
   strokes?: Array<any>;
+  /** when set, visualizes judgment: 'correct' -> red bg, 'incorrect' -> blue bg and invert black strokes to white */
+  judgeMode?: "correct" | "incorrect" | null;
 };
 
 export const ReadOnlyCanvas: React.FC<ReadOnlyCanvasProps> = ({
   mode = "question",
   strokes = [],
+  judgeMode = null,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -35,8 +38,17 @@ export const ReadOnlyCanvas: React.FC<ReadOnlyCanvasProps> = ({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    if (mode === "question") {
-      // 青背景
+    // If judgeMode is set, draw colored background accordingly
+    if (judgeMode === "correct") {
+      // more vivid red (tailwind red-500)
+      ctx.fillStyle = "#ef4444"; // red-500
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    } else if (judgeMode === "incorrect") {
+      // more vivid blue (tailwind blue-500)
+      ctx.fillStyle = "#3b82f6"; // blue-500
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    } else if (mode === "question") {
+      // default question background (blue)
       ctx.fillStyle = "#3490dc";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       // 文字
@@ -46,10 +58,10 @@ export const ReadOnlyCanvas: React.FC<ReadOnlyCanvasProps> = ({
       ctx.textBaseline = "middle";
       ctx.fillText("?", canvas.width / 2, canvas.height / 2);
     } else if (mode === "star") {
-      // 白背景
+      // white background
       ctx.fillStyle = "white";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-      // 星を中央に描画
+      // star drawing
       const cx = canvas.width / 2;
       const cy = canvas.height / 2;
       const spikes = 5;
@@ -75,7 +87,16 @@ export const ReadOnlyCanvas: React.FC<ReadOnlyCanvasProps> = ({
       strokes.forEach((stroke: any) => {
         if (!stroke || !stroke.points || stroke.points.length < 1) return;
         ctx.beginPath();
-        ctx.strokeStyle = stroke.color || "#000";
+        // when judged, invert black strokes to white
+        const strokeColorRaw = stroke.color || "#000";
+        let strokeColor = strokeColorRaw;
+        if (
+          judgeMode &&
+          (strokeColorRaw === "#000" || strokeColorRaw === "black")
+        ) {
+          strokeColor = "#fff";
+        }
+        ctx.strokeStyle = strokeColor;
         ctx.lineWidth = stroke.width || 2;
         ctx.lineCap = "round";
         ctx.lineJoin = "round";

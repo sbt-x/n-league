@@ -25,6 +25,7 @@ type CanvasProps = {
 export type CanvasHandle = {
   clear: () => void;
   loadStrokes?: (s: Stroke[]) => void;
+  getSnapshot?: (maxSize?: number) => Promise<string | null>;
 };
 
 export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
@@ -361,6 +362,37 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
           replaceStrokes(s ?? []);
         } catch (e) {
           // ignore
+        }
+      },
+      getSnapshot: async (maxSize = 1024) => {
+        const canvas = canvasRef.current;
+        const offscreen = offscreenCanvasRef.current;
+        if (!canvas || !offscreen) return null;
+        try {
+          // create a temporary canvas to scale down if needed
+          const srcW = canvas.width;
+          const srcH = canvas.height;
+          let dstW = srcW;
+          let dstH = srcH;
+          if (Math.max(srcW, srcH) > maxSize) {
+            const ratio = maxSize / Math.max(srcW, srcH);
+            dstW = Math.round(srcW * ratio);
+            dstH = Math.round(srcH * ratio);
+          }
+          if (dstW === srcW && dstH === srcH) {
+            return (canvas as HTMLCanvasElement).toDataURL("image/png");
+          }
+
+          const tmp = document.createElement("canvas");
+          tmp.width = dstW;
+          tmp.height = dstH;
+          const tctx = tmp.getContext("2d");
+          if (!tctx)
+            return (canvas as HTMLCanvasElement).toDataURL("image/png");
+          tctx.drawImage(canvas, 0, 0, srcW, srcH, 0, 0, dstW, dstH);
+          return tmp.toDataURL("image/png");
+        } catch (e) {
+          return null;
         }
       },
     }));

@@ -126,7 +126,9 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
       const offscreenCtx = offscreenCanvas.getContext("2d");
       if (!ctx || !offscreenCtx) return;
 
-      // ストロークが空の場合は両方のキャンバスをクリア
+      // ストロークが空の場合はオフスクリーンをクリアしつつ、
+      // judgeMode が設定されていればメインキャンバスに背景色を描画する。
+      // これにより、空の提出（描画なし）でも正誤判定時に背景色が反映される。
       if (strokes.length === 0) {
         offscreenCtx.clearRect(
           0,
@@ -134,7 +136,16 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
           offscreenCanvas.width,
           offscreenCanvas.height
         );
+        // clear main canvas first
         ctx.clearRect(0, 0, canvas.width, canvas.height);
+        // If judgeMode is set, draw colored background even when there are no strokes
+        if (judgeMode === "correct") {
+          ctx.fillStyle = "#ef4444"; // red-500
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        } else if (judgeMode === "incorrect") {
+          ctx.fillStyle = "#3b82f6"; // blue-500
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
         lastRenderedStrokeCount.current = 0;
         return;
       }
@@ -275,7 +286,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
           ctx.globalCompositeOperation = "source-over";
         }
       }
-    }, [strokes, isDrawing]);
+  }, [strokes, isDrawing, judgeMode, canvasSize.width, canvasSize.height]);
 
     function handlePointerDown(e: React.PointerEvent) {
       // DEBUG: log pointerdown and readOnly state

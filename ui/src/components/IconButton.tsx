@@ -23,7 +23,7 @@ export const IconButton: React.FC<ButtonProps> = ({
     <button
       onClick={disabled ? undefined : onClick}
       onMouseDown={onMouseDown}
-      className={`flex items-center justify-center ${borderRadius} aspect-square ${className} ${disabled ? "opacity-60 cursor-not-allowed" : ""} transition-colors duration-200 ease-in-out`}
+      className={`flex items-center justify-center ${borderRadius} aspect-square ${className} ${disabled ? "opacity-60 cursor-not-allowed" : ""}`}
       disabled={disabled}
     >
       {children}

@@ -9,4 +9,11 @@ export interface Stroke {
   color: Color;
   width: Width;
   points: Point[];
+  /** optional metadata about the source canvas that produced this stroke
+   *  used for scaling/positioning when rendering on a different-sized canvas
+   */
+  metadata?: {
+    canvasWidth: number;
+    canvasHeight: number;
+  } | null;
 }

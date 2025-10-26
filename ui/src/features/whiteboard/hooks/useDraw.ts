@@ -31,7 +31,13 @@ export function useDraw({
         points: [point],
       };
       currentStroke.current = newStroke;
-      setStrokes((prev) => [...prev, newStroke]);
+      setStrokes((prev) => {
+        try {
+          // eslint-disable-next-line no-console
+          console.debug("useDraw startDrawing", { tool, color, width, point });
+        } catch (err) {}
+        return [...prev, newStroke];
+      });
       setIsDrawing(true);
     },
     [tool, color, width]
@@ -57,6 +63,13 @@ export function useDraw({
         ...strokeRef,
         points: strokeRef.points,
       };
+      try {
+        // eslint-disable-next-line no-console
+        console.debug("useDraw continueDrawing", {
+          point,
+          lastPointsCount: strokeRef.points.length,
+        });
+      } catch (err) {}
       return newStrokes;
     });
   }, []);
@@ -66,6 +79,10 @@ export function useDraw({
     const finished = currentStroke.current;
     currentStroke.current = null;
     setIsDrawing(false);
+    try {
+      // eslint-disable-next-line no-console
+      console.debug("useDraw endDrawing", { finished });
+    } catch (err) {}
     return finished ?? null;
   }, []);
 
@@ -78,6 +95,12 @@ export function useDraw({
 
   // allow external replacement/loading of strokes (used for sync on reconnect)
   const replaceStrokes = useCallback((newStrokes: Stroke[]) => {
+    try {
+      // eslint-disable-next-line no-console
+      console.debug("useDraw replaceStrokes", {
+        newStrokesLength: (newStrokes || []).length,
+      });
+    } catch (err) {}
     setStrokes(newStrokes ?? []);
     currentStroke.current = null;
     setIsDrawing(false);
@@ -89,6 +112,27 @@ export function useDraw({
       replaceStrokes(initialStrokes);
     }
   }, [initialStrokes, replaceStrokes]);
+
+  // DEBUG: trace strokes changes to detect unexpected resets
+  const prevLenRef = useRef<number | null>(null);
+  useEffect(() => {
+    try {
+      // eslint-disable-next-line no-console
+      console.debug("useDraw strokes changed", { length: strokes.length });
+      if (
+        prevLenRef.current &&
+        prevLenRef.current > 0 &&
+        strokes.length === 0
+      ) {
+        // unexpected reset: print stack trace to find caller
+        // eslint-disable-next-line no-console
+        console.warn("useDraw detected strokes reset to 0");
+        // eslint-disable-next-line no-console
+        console.trace();
+      }
+    } catch (err) {}
+    prevLenRef.current = strokes.length;
+  }, [strokes]);
 
   // Undo機能
   const undo = useCallback(() => {

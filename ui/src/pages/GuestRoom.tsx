@@ -131,6 +131,7 @@ const GuestRoom: React.FC<GuestRoomProps> = ({
   const whiteboardRef = useRef<WhiteboardHandle>(null);
   const [isSent, setIsSent] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [remoteStrokes, setRemoteStrokes] = useState<Record<string, any[]>>({});
 
   // Keep local `isSent` in sync with server state for this member.
   // This ensures that after a reload, if the server reports this member as
@@ -220,17 +221,65 @@ const GuestRoom: React.FC<GuestRoomProps> = ({
       strokesByAuthor?: Record<string, any[]>;
     }) {
       if (!payload || !payload.strokesByAuthor) return;
-      const myKey = memberId ?? "";
-      // server stores strokes by author id; try both uuid and id keys
-      const strokes = payload.strokesByAuthor[myKey] ?? [];
+      // populate per-author remote strokes map
+      setRemoteStrokes(payload.strokesByAuthor);
+      // also load any strokes for this client into the editable whiteboard
+      // only when we have a known memberId and the server actually provides strokes
+      // for this author. Avoid calling loadStrokes([]) which would clear the canvas
+      // repeatedly when no strokes exist for this member on the server.
+      if (memberId) {
+        const myKey = memberId;
+        const hasMyStrokes = Object.prototype.hasOwnProperty.call(
+          payload.strokesByAuthor,
+          myKey
+        );
+        const myStrokes = payload.strokesByAuthor[myKey] ?? [];
+        if (hasMyStrokes && Array.isArray(myStrokes) && myStrokes.length > 0) {
+          try {
+            whiteboardRef.current?.loadStrokes?.(myStrokes);
+          } catch (e) {
+            // ignore
+          }
+        }
+      }
+    }
+
+    function handleDrawBroadcast(payload: { authorId?: string; stroke: any }) {
+      const author = payload?.authorId ?? "unknown";
+      setRemoteStrokes((prev) => {
+        const copy = { ...prev };
+        if (!copy[author]) copy[author] = [];
+        copy[author] = [...copy[author], payload.stroke];
+        return copy;
+      });
+    }
+
+    function handleCanvasClear(payload: { authorId?: string }) {
+      if (!payload || !payload.authorId) return;
+      const author = payload.authorId;
+      setRemoteStrokes((prev) => {
+        const copy = { ...prev };
+        copy[author] = [];
+        return copy;
+      });
+      // if this clear targets our own authorId, clear our local whiteboard too
       try {
-        whiteboardRef.current?.loadStrokes?.(strokes);
+        if (author === memberId) {
+          whiteboardRef.current?.clear?.();
+        }
       } catch (e) {
         // ignore
       }
     }
 
+    function handleCanvasClearAll() {
+      setRemoteStrokes({});
+    }
+
     activeSocket.on("canvas:sync:state", handleCanvasSync);
+    activeSocket.on("draw:broadcast", handleDrawBroadcast);
+    activeSocket.on("canvas:clear", handleCanvasClear);
+    activeSocket.on("canvas:clearAll", handleCanvasClearAll);
 
     // request initial sync
     try {
@@ -241,6 +290,9 @@ const GuestRoom: React.FC<GuestRoomProps> = ({
 
     return () => {
       activeSocket.off("canvas:sync:state", handleCanvasSync);
+      activeSocket.off("draw:broadcast", handleDrawBroadcast);
+      activeSocket.off("canvas:clear", handleCanvasClear);
+      activeSocket.off("canvas:clearAll", handleCanvasClearAll);
     };
   }, [getSocket, socket, roomId, memberId]);
 
@@ -535,6 +587,22 @@ const GuestRoom: React.FC<GuestRoomProps> = ({
                             ? "star"
                             : "question"
                         }
+                        // show strokes depending on phase and visibility rules
+                        strokes={(() => {
+                          const phase = (roomState as any)?.phase ?? "LOBBY";
+                          const key = (member as any).uuid ?? member.id;
+                          // Guests should NOT see other guests' drawings while a round is active or answers are locked.
+                          // Only allow visibility in LOBBY, REVEAL, and RESULT phases.
+                          if (
+                            phase === "LOBBY" ||
+                            phase === "REVEAL" ||
+                            phase === "RESULT"
+                          ) {
+                            return remoteStrokes[key] ?? [];
+                          }
+                          // For IN_ROUND or LOCKED, hide others' canvases entirely (even if completed).
+                          return [];
+                        })()}
                         // Only show host judgments to guests when answers are revealed
                         // (REVEAL phase) or when showing final results (RESULT).
                         judgeMode={(() => {

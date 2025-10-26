@@ -105,9 +105,32 @@ export const ReadOnlyCanvas: React.FC<ReadOnlyCanvasProps> = ({
         } else {
           ctx.globalCompositeOperation = "source-over";
         }
-        ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+        // If metadata contains the source canvas size, scale+center the stroke
+        const meta = stroke.metadata;
+        let transformPoint = (p: any) => ({ x: p.x, y: p.y });
+        if (meta && meta.canvasWidth > 0 && meta.canvasHeight > 0) {
+          const srcW = meta.canvasWidth;
+          const srcH = meta.canvasHeight;
+          const dstW = canvas.width;
+          const dstH = canvas.height;
+          // uniform scale to fit
+          const scale = Math.min(dstW / srcW, dstH / srcH);
+          const scaledW = srcW * scale;
+          const scaledH = srcH * scale;
+          // center the scaled drawing within destination canvas
+          const offsetX = (dstW - scaledW) / 2;
+          const offsetY = (dstH - scaledH) / 2;
+          transformPoint = (p: any) => ({
+            x: Math.round(p.x * scale + offsetX),
+            y: Math.round(p.y * scale + offsetY),
+          });
+        }
+
+        const p0 = transformPoint(stroke.points[0]);
+        ctx.moveTo(p0.x, p0.y);
         for (let i = 1; i < stroke.points.length; i++) {
-          ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
+          const pt = transformPoint(stroke.points[i]);
+          ctx.lineTo(pt.x, pt.y);
         }
         ctx.stroke();
         ctx.globalCompositeOperation = "source-over";

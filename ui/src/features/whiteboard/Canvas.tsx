@@ -98,11 +98,26 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
       initialStrokes,
     });
 
+    // buffer incoming loadStrokes while user is actively drawing to avoid
+    // clobbering the in-progress stroke. Applied after drawing finishes.
+    const pendingReplaceRef = useRef<Stroke[] | null>(null);
+
     // Canvas rendering effect - 最適化版
     useEffect(() => {
       const canvas = canvasRef.current;
       const offscreenCanvas = offscreenCanvasRef.current;
       if (!canvas || !offscreenCanvas) return;
+
+      try {
+        // eslint-disable-next-line no-console
+        console.debug("Canvas render effect", {
+          canvasWidth: canvas.width,
+          canvasHeight: canvas.height,
+          offscreenExists: !!offscreenCanvas,
+          strokesLength: strokes.length,
+          lastRenderedStrokeCount: lastRenderedStrokeCount.current,
+        });
+      } catch (err) {}
 
       const ctx = canvas.getContext("2d");
       const offscreenCtx = offscreenCanvas.getContext("2d");
@@ -260,6 +275,14 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
     }, [strokes, isDrawing]);
 
     function handlePointerDown(e: React.PointerEvent) {
+      // DEBUG: log pointerdown and readOnly state
+      try {
+        // eslint-disable-next-line no-console
+        console.debug("Canvas pointerdown", {
+          isReadOnly,
+          pointerId: e.pointerId,
+        });
+      } catch (err) {}
       if (isReadOnly) return;
 
       const canvas = canvasRef.current;
@@ -280,6 +303,10 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
     }
 
     function handlePointerMove(e: React.PointerEvent) {
+      try {
+        // eslint-disable-next-line no-console
+        console.debug("Canvas pointermove", { isDrawing, isReadOnly });
+      } catch (err) {}
       const canvas = canvasRef.current;
       if (!canvas) return;
 
@@ -306,6 +333,10 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
     }
 
     function handlePointerUp(e: React.PointerEvent) {
+      try {
+        // eslint-disable-next-line no-console
+        console.debug("Canvas pointerup", { isDrawing, isReadOnly });
+      } catch (err) {}
       if (isReadOnly) return;
 
       // クリーンアップ
@@ -329,10 +360,23 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
       }
       if (finished && typeof onStrokeComplete === "function") {
         try {
-          onStrokeComplete(finished as Stroke);
+          const canvas = canvasRef.current;
+          const meta = canvas
+            ? { canvasWidth: canvas.width, canvasHeight: canvas.height }
+            : null;
+          onStrokeComplete({ ...(finished as Stroke), metadata: meta });
         } catch (err) {
           // ignore
         }
+      }
+      // apply any pending server-supplied strokes after finishing the local stroke
+      try {
+        if (pendingReplaceRef.current) {
+          replaceStrokes(pendingReplaceRef.current);
+          pendingReplaceRef.current = null;
+        }
+      } catch (err) {
+        // ignore
       }
     }
 
@@ -352,10 +396,23 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
         const finished = endDrawing();
         if (finished && typeof onStrokeComplete === "function") {
           try {
-            onStrokeComplete(finished as Stroke);
+            const canvas = canvasRef.current;
+            const meta = canvas
+              ? { canvasWidth: canvas.width, canvasHeight: canvas.height }
+              : null;
+            onStrokeComplete({ ...(finished as Stroke), metadata: meta });
           } catch (err) {
             // ignore
           }
+        }
+        // apply any pending server-supplied strokes after finishing the local stroke
+        try {
+          if (pendingReplaceRef.current) {
+            replaceStrokes(pendingReplaceRef.current);
+            pendingReplaceRef.current = null;
+          }
+        } catch (err) {
+          // ignore
         }
         // release pointer capture if present
         try {
@@ -375,12 +432,20 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
 
     useImperativeHandle(ref, () => ({
       clear: () => {
+        // clear strokes immediately and drop any buffered server-supplied strokes
+        pendingReplaceRef.current = null;
         clearCanvas();
       },
       // allow parent to replace strokes (used when syncing from server)
       loadStrokes: (s: Stroke[]) => {
         try {
-          replaceStrokes(s ?? []);
+          // If currently drawing, buffer the incoming strokes and apply
+          // after the draw finishes to avoid wiping the current stroke.
+          if (isDrawing) {
+            pendingReplaceRef.current = s ?? [];
+          } else {
+            replaceStrokes(s ?? []);
+          }
         } catch (e) {
           // ignore
         }
@@ -421,6 +486,14 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
     return (
       <div className="flex flex-col h-full w-full">
         <div ref={containerRef} className="relative w-full h-full">
+          {/* DEBUG OVERLAY: show strokes count and drawing state */}
+          <div
+            style={{ zIndex: 50 }}
+            className="absolute top-2 left-2 bg-black text-white text-xs px-2 py-1 rounded opacity-80 pointer-events-none"
+          >
+            {/* strokes length comes from closure via strokes variable */}
+            Strokes: {strokes.length} {isDrawing ? "(drawing)" : ""}
+          </div>
           <canvas
             ref={canvasRef}
             width={canvasSize.width}

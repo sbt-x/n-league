@@ -7,6 +7,8 @@ export type WhiteboardProps = {
   showToolbar?: boolean;
   isReadOnly?: boolean;
   isDimmed?: boolean;
+  /** when true, show stroke count overlay on the canvas (default: false) */
+  showStrokeCount?: boolean;
   onStrokeComplete?: (stroke: any) => void;
   initialStrokes?: any[];
   /** show judgment visualization on this board (for local player's board) */
@@ -25,6 +27,7 @@ export const Whiteboard = forwardRef<WhiteboardHandle, WhiteboardProps>(
       showToolbar = false,
       isReadOnly = false,
       isDimmed = false,
+      showStrokeCount = false,
       onStrokeComplete,
       initialStrokes,
       judgeMode = null,
@@ -82,6 +85,7 @@ export const Whiteboard = forwardRef<WhiteboardHandle, WhiteboardProps>(
             width={width}
             isReadOnly={isReadOnly}
             isDimmed={isDimmed}
+            showStrokeCount={showStrokeCount}
             judgeMode={judgeMode}
             onStrokeComplete={onStrokeComplete}
             initialStrokes={initialStrokes}

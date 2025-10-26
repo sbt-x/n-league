@@ -254,6 +254,31 @@ const HostRoom: React.FC<HostRoomProps> = ({ roomId: propRoomId }) => {
     return `${window.location.origin}/rooms/${roomId}`;
   }, [roomId]);
 
+  // host debug visibility (persist per room)
+  const [hostDebugVisible, setHostDebugVisible] = React.useState(false);
+  React.useEffect(() => {
+    try {
+      if (!roomId) return;
+      const key = `hostDebug:${roomId}`;
+      const stored = localStorage.getItem(key);
+      setHostDebugVisible(stored === "1");
+    } catch (e) {
+      // ignore
+    }
+  }, [roomId]);
+
+  const toggleHostDebug = React.useCallback(() => {
+    try {
+      if (!roomId) return;
+      const key = `hostDebug:${roomId}`;
+      const next = !hostDebugVisible;
+      setHostDebugVisible(next);
+      localStorage.setItem(key, next ? "1" : "0");
+    } catch (e) {
+      // ignore
+    }
+  }, [roomId, hostDebugVisible]);
+
   const handleCopyLink = async () => {
     try {
       await navigator.clipboard.writeText(inviteLink);
@@ -516,6 +541,19 @@ const HostRoom: React.FC<HostRoomProps> = ({ roomId: propRoomId }) => {
             <div className="mt-auto text-xs text-gray-400">
               招待リンクは参加者がゲスト入室ページで使用します
             </div>
+            {/* debug toggle (hidden by default) */}
+            {isHost && (
+              <div className="mt-3">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={hostDebugVisible}
+                    onChange={() => toggleHostDebug()}
+                  />
+                  <span>デバッグ情報を表示</span>
+                </label>
+              </div>
+            )}
             {/* Host control quick actions */}
             {isHost && (
               <div className="mt-4">
@@ -580,27 +618,7 @@ const HostRoom: React.FC<HostRoomProps> = ({ roomId: propRoomId }) => {
                 </div>
               </div>
             )}
-            {/* Debug panel - temporary */}
-            <div className="mt-3 p-2 bg-gray-50 border rounded text-xs text-gray-600">
-              <div className="font-medium text-sm">Debug</div>
-              <div>
-                memberId: <span className="font-mono">{memberId ?? "-"}</span>
-              </div>
-              <div>
-                isHost: <span className="font-mono">{String(isHost)}</span>
-              </div>
-              <div>
-                phase:{" "}
-                <span className="font-mono">{currentPhase ?? "LOBBY"}</span>
-              </div>
-              <div>
-                hostUuid:{" "}
-                <span className="font-mono">
-                  {(roomState as any)?.members?.find((m: any) => m.isHost)
-                    ?.uuid ?? "-"}
-                </span>
-              </div>
-            </div>
+            {/* removed in-panel debug box; displayed as overlay when enabled */}
           </div>
         </aside>
       </div>
@@ -668,6 +686,32 @@ const HostRoom: React.FC<HostRoomProps> = ({ roomId: propRoomId }) => {
               );
             })}
         </div>
+        {/* debug overlay shown on host screen area when enabled */}
+        {isHost && hostDebugVisible && (
+          <div
+            className="absolute bottom-6 right-6 bg-black text-white text-xs px-3 py-2 rounded opacity-90 shadow-lg z-30 pointer-events-none"
+            style={{ maxWidth: 320 }}
+          >
+            <div className="font-medium text-sm">Debug</div>
+            <div>
+              memberId: <span className="font-mono">{memberId ?? "-"}</span>
+            </div>
+            <div>
+              isHost: <span className="font-mono">{String(isHost)}</span>
+            </div>
+            <div>
+              phase:{" "}
+              <span className="font-mono">{currentPhase ?? "LOBBY"}</span>
+            </div>
+            <div>
+              hostUuid:{" "}
+              <span className="font-mono">
+                {(roomState as any)?.members?.find((m: any) => m.isHost)
+                  ?.uuid ?? "-"}
+              </span>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

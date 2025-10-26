@@ -17,6 +17,8 @@ type CanvasProps = {
   onUndo?: () => void;
   isReadOnly?: boolean;
   isDimmed?: boolean;
+  /** when true, show a small overlay with the current stroke count (default: false) */
+  showStrokeCount?: boolean;
   /** when set, visualizes judgment: 'correct' -> red bg, 'incorrect' -> blue bg and invert black strokes to white */
   judgeMode?: "correct" | "incorrect" | null;
   onStrokeComplete?: (stroke: Stroke) => void;
@@ -38,6 +40,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
       width,
       isReadOnly = false,
       isDimmed = false,
+      showStrokeCount = false,
       judgeMode = null,
       onStrokeComplete,
       initialStrokes,
@@ -486,14 +489,16 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
     return (
       <div className="flex flex-col h-full w-full">
         <div ref={containerRef} className="relative w-full h-full">
-          {/* DEBUG OVERLAY: show strokes count and drawing state */}
-          <div
-            style={{ zIndex: 50 }}
-            className="absolute top-2 left-2 bg-black text-white text-xs px-2 py-1 rounded opacity-80 pointer-events-none"
-          >
-            {/* strokes length comes from closure via strokes variable */}
-            Strokes: {strokes.length} {isDrawing ? "(drawing)" : ""}
-          </div>
+          {/* optional stroke-count overlay */}
+          {showStrokeCount && (
+            <div
+              style={{ zIndex: 50 }}
+              className="absolute top-2 left-2 bg-black text-white text-xs px-2 py-1 rounded opacity-80 pointer-events-none"
+            >
+              {/* strokes length comes from closure via strokes variable */}
+              Strokes: {strokes.length} {isDrawing ? "(drawing)" : ""}
+            </div>
+          )}
           <canvas
             ref={canvasRef}
             width={canvasSize.width}

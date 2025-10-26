@@ -472,25 +472,60 @@ const GuestRoom: React.FC<GuestRoomProps> = ({
                     }`}
                   >
                     {isMe ? (
-                      <Whiteboard
-                        showToolbar={false}
-                        ref={whiteboardRef}
-                        isReadOnly={isSent}
-                        isDimmed={isSent}
-                        onStrokeComplete={(stroke) => {
-                          const activeSocket = getSocket ? getSocket() : socket;
-                          if (activeSocket && roomId) {
-                            try {
-                              activeSocket.emit("draw:stroke", {
-                                roomId,
-                                stroke,
-                              });
-                            } catch (e) {
-                              // ignore emit errors
-                            }
-                          }
-                        }}
-                      />
+                      (() => {
+                        // determine whether this client may draw
+                        // LOBBY and RESULT: free drawing allowed
+                        // IN_ROUND: drawing allowed unless already sent
+                        // LOCKED/REVEAL: drawing disabled
+                        const phase = (roomState as any)?.phase ?? "LOBBY";
+                        let editable = true;
+                        if (phase === "LOBBY" || phase === "RESULT") {
+                          editable = true;
+                        } else if (phase === "IN_ROUND") {
+                          editable = !isSent;
+                        } else {
+                          // LOCKED or REVEAL
+                          editable = false;
+                        }
+                        const isDimmed = isSent && phase === "IN_ROUND";
+
+                        return (
+                          <Whiteboard
+                            showToolbar={false}
+                            ref={whiteboardRef}
+                            isReadOnly={!editable}
+                            isDimmed={isDimmed}
+                            onStrokeComplete={(stroke) => {
+                              const activeSocket = getSocket
+                                ? getSocket()
+                                : socket;
+                              if (activeSocket && roomId) {
+                                try {
+                                  activeSocket.emit("draw:stroke", {
+                                    roomId,
+                                    stroke,
+                                  });
+                                } catch (e) {
+                                  // ignore emit errors
+                                }
+                              }
+                            }}
+                            // show judge visualization for self when answers are revealed
+                            judgeMode={(() => {
+                              const phase =
+                                (roomState as any)?.phase ?? "LOBBY";
+                              if (phase !== "REVEAL" && phase !== "RESULT")
+                                return null;
+                              const judgment = (roomState as any)?.rounds?.[
+                                (roomState as any)?.roundIndex ?? 0
+                              ]?.judgments?.[memberIdent];
+                              if (judgment === true) return "correct";
+                              if (judgment === false) return "incorrect";
+                              return null;
+                            })()}
+                          />
+                        );
+                      })()
                     ) : (
                       <ReadOnlyWhiteboard
                         mode={
@@ -500,20 +535,19 @@ const GuestRoom: React.FC<GuestRoomProps> = ({
                             ? "star"
                             : "question"
                         }
-                        judgeMode={
-                          (roomState as any)?.rounds?.[
+                        // Only show host judgments to guests when answers are revealed
+                        // (REVEAL phase) or when showing final results (RESULT).
+                        judgeMode={(() => {
+                          const phase = (roomState as any)?.phase ?? "LOBBY";
+                          if (phase !== "REVEAL" && phase !== "RESULT")
+                            return null;
+                          const judgment = (roomState as any)?.rounds?.[
                             (roomState as any)?.roundIndex ?? 0
-                          ]?.judgments?.[(member as any).uuid ?? member.id] ===
-                          true
-                            ? "correct"
-                            : (roomState as any)?.rounds?.[
-                                  (roomState as any)?.roundIndex ?? 0
-                                ]?.judgments?.[
-                                  (member as any).uuid ?? member.id
-                                ] === false
-                              ? "incorrect"
-                              : null
-                        }
+                          ]?.judgments?.[(member as any).uuid ?? member.id];
+                          if (judgment === true) return "correct";
+                          if (judgment === false) return "incorrect";
+                          return null;
+                        })()}
                       />
                     )}
                   </div>

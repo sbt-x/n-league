@@ -543,6 +543,14 @@ export class RoomsGateway {
     if (!(await this.isHostClient(client, data.roomId))) return;
     const gs = this.ensureGameState(data.roomId);
     gs.phase = "RESULT";
+    // clear in-memory strokes and completed markers so guests see empty boards
+    try {
+      this.recentStrokes.set(data.roomId, []);
+      this.completedMembers.set(data.roomId, new Set<string>());
+      this.server.to(data.roomId).emit("canvas:clearAll");
+    } catch (e) {
+      // ignore
+    }
     this.emitRoomState(data.roomId);
   }
 

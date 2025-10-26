@@ -17,6 +17,8 @@ type CanvasProps = {
   onUndo?: () => void;
   isReadOnly?: boolean;
   isDimmed?: boolean;
+  /** when set, visualizes judgment: 'correct' -> red bg, 'incorrect' -> blue bg and invert black strokes to white */
+  judgeMode?: "correct" | "incorrect" | null;
   onStrokeComplete?: (stroke: Stroke) => void;
   /** load initial strokes (e.g. from server) */
   initialStrokes?: Stroke[];
@@ -36,6 +38,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
       width,
       isReadOnly = false,
       isDimmed = false,
+      judgeMode = null,
       onStrokeComplete,
       initialStrokes,
     },
@@ -205,6 +208,15 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
 
       // メインキャンバスをクリアしてオフスクリーンキャンバスをコピー
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+      // If judgeMode is set, draw a colored background first (mirror ReadOnlyCanvas)
+      if (judgeMode === "correct") {
+        ctx.fillStyle = "#ef4444"; // red-500
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      } else if (judgeMode === "incorrect") {
+        ctx.fillStyle = "#3b82f6"; // blue-500
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+      // draw cached strokes
       ctx.drawImage(offscreenCanvas, 0, 0);
 
       // 描画中のストロークがあれば、メインキャンバスに描画
@@ -213,7 +225,16 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
         const points = currentStroke.points;
 
         if (points.length > 1) {
-          ctx.strokeStyle = currentStroke.color;
+          // when judged, invert pure black strokes to white for visibility
+          const strokeColorRaw = currentStroke.color || "#000";
+          let strokeColor = strokeColorRaw;
+          if (
+            judgeMode &&
+            (strokeColorRaw === "#000" || strokeColorRaw === "black")
+          ) {
+            strokeColor = "#fff";
+          }
+          ctx.strokeStyle = strokeColor;
           ctx.lineWidth = currentStroke.width;
           ctx.lineCap = "round";
           ctx.lineJoin = "round";

@@ -9,6 +9,8 @@ export type WhiteboardProps = {
   isDimmed?: boolean;
   onStrokeComplete?: (stroke: any) => void;
   initialStrokes?: any[];
+  /** show judgment visualization on this board (for local player's board) */
+  judgeMode?: "correct" | "incorrect" | null;
 };
 
 export type WhiteboardHandle = {
@@ -25,6 +27,7 @@ export const Whiteboard = forwardRef<WhiteboardHandle, WhiteboardProps>(
       isDimmed = false,
       onStrokeComplete,
       initialStrokes,
+      judgeMode = null,
     },
     ref
   ) => {
@@ -79,6 +82,7 @@ export const Whiteboard = forwardRef<WhiteboardHandle, WhiteboardProps>(
             width={width}
             isReadOnly={isReadOnly}
             isDimmed={isDimmed}
+            judgeMode={judgeMode}
             onStrokeComplete={onStrokeComplete}
             initialStrokes={initialStrokes}
           />

@@ -447,9 +447,7 @@ const HostRoom: React.FC<HostRoomProps> = ({ roomId: propRoomId }) => {
             </div>
 
             <div>
-              <div className="text-xs text-gray-500">
-                最大人数（ホスト除く）
-              </div>
+              <div className="text-xs text-gray-500">最大人数</div>
               <div className="flex gap-2 items-center">
                 <input
                   type="number"
@@ -498,15 +496,18 @@ const HostRoom: React.FC<HostRoomProps> = ({ roomId: propRoomId }) => {
                       })();
                     }
                   }}
-                  className="bg-blue-500 text-white p-2"
+                  className={
+                    // when saveSuccess is truthy, show green button to indicate success
+                    saveSuccess
+                      ? "bg-green-500 text-white p-2"
+                      : "bg-blue-500 text-white p-2"
+                  }
                   border="rounded"
                   disabled={savingMax}
                 >
                   <FaCheck />
                 </IconButton>
-                {saveSuccess && (
-                  <div className="text-xs text-green-600">{saveSuccess}</div>
-                )}
+                {/* Success is now indicated by coloring the save button green for the same duration */}
                 {saveError && (
                   <div className="text-xs text-red-600">{saveError}</div>
                 )}
@@ -525,22 +526,19 @@ const HostRoom: React.FC<HostRoomProps> = ({ roomId: propRoomId }) => {
                 />
                 <IconButton
                   onClick={() => handleCopyLink()}
-                  className="bg-blue-500 text-white p-2"
+                  className={
+                    copied
+                      ? "bg-green-500 text-white p-2"
+                      : "bg-blue-500 text-white p-2"
+                  }
                   border="rounded"
                 >
                   <FaClipboard />
                 </IconButton>
               </div>
-              {copied && (
-                <div className="text-xs text-green-600 mt-1">
-                  コピーしました
-                </div>
-              )}
+              {/* copied confirmation text removed; button color indicates success */}
             </div>
 
-            <div className="mt-auto text-xs text-gray-400">
-              招待リンクは参加者がゲスト入室ページで使用します
-            </div>
             {/* debug toggle (hidden by default) */}
             {isHost && (
               <div className="mt-3">
@@ -557,7 +555,6 @@ const HostRoom: React.FC<HostRoomProps> = ({ roomId: propRoomId }) => {
             {/* Host control quick actions */}
             {isHost && (
               <div className="mt-4">
-                <div className="text-xs text-gray-500 mb-2">ホスト操作</div>
                 <div className="flex flex-col gap-2">
                   {currentPhase === "LOBBY" && (
                     <button

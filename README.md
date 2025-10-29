@@ -1,4 +1,4 @@
-# n-league
+# n-league(WIP)
 
 ## ディレクトリ構成
 

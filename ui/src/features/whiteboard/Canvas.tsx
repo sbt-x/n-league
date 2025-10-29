@@ -17,6 +17,10 @@ type CanvasProps = {
   onUndo?: () => void;
   isReadOnly?: boolean;
   isDimmed?: boolean;
+  /** when true, show a small overlay with the current stroke count (default: false) */
+  showStrokeCount?: boolean;
+  /** when set, visualizes judgment: 'correct' -> red bg, 'incorrect' -> blue bg and invert black strokes to white */
+  judgeMode?: "correct" | "incorrect" | null;
   onStrokeComplete?: (stroke: Stroke) => void;
   /** load initial strokes (e.g. from server) */
   initialStrokes?: Stroke[];
@@ -25,6 +29,7 @@ type CanvasProps = {
 export type CanvasHandle = {
   clear: () => void;
   loadStrokes?: (s: Stroke[]) => void;
+  getSnapshot?: (maxSize?: number) => Promise<string | null>;
 };
 
 export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
@@ -35,6 +40,8 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
       width,
       isReadOnly = false,
       isDimmed = false,
+      showStrokeCount = false,
+      judgeMode = null,
       onStrokeComplete,
       initialStrokes,
     },
@@ -94,17 +101,34 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
       initialStrokes,
     });
 
+    // buffer incoming loadStrokes while user is actively drawing to avoid
+    // clobbering the in-progress stroke. Applied after drawing finishes.
+    const pendingReplaceRef = useRef<Stroke[] | null>(null);
+
     // Canvas rendering effect - 最適化版
     useEffect(() => {
       const canvas = canvasRef.current;
       const offscreenCanvas = offscreenCanvasRef.current;
       if (!canvas || !offscreenCanvas) return;
 
+      try {
+        // eslint-disable-next-line no-console
+        console.debug("Canvas render effect", {
+          canvasWidth: canvas.width,
+          canvasHeight: canvas.height,
+          offscreenExists: !!offscreenCanvas,
+          strokesLength: strokes.length,
+          lastRenderedStrokeCount: lastRenderedStrokeCount.current,
+        });
+      } catch (err) {}
+
       const ctx = canvas.getContext("2d");
       const offscreenCtx = offscreenCanvas.getContext("2d");
       if (!ctx || !offscreenCtx) return;
 
-      // ストロークが空の場合は両方のキャンバスをクリア
+      // ストロークが空の場合はオフスクリーンをクリアしつつ、
+      // judgeMode が設定されていればメインキャンバスに背景色を描画する。
+      // これにより、空の提出（描画なし）でも正誤判定時に背景色が反映される。
       if (strokes.length === 0) {
         offscreenCtx.clearRect(
           0,
@@ -112,7 +136,16 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
           offscreenCanvas.width,
           offscreenCanvas.height
         );
+        // clear main canvas first
         ctx.clearRect(0, 0, canvas.width, canvas.height);
+        // If judgeMode is set, draw colored background even when there are no strokes
+        if (judgeMode === "correct") {
+          ctx.fillStyle = "#ef4444"; // red-500
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        } else if (judgeMode === "incorrect") {
+          ctx.fillStyle = "#3b82f6"; // blue-500
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
         lastRenderedStrokeCount.current = 0;
         return;
       }
@@ -204,6 +237,15 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
 
       // メインキャンバスをクリアしてオフスクリーンキャンバスをコピー
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+      // If judgeMode is set, draw a colored background first (mirror ReadOnlyCanvas)
+      if (judgeMode === "correct") {
+        ctx.fillStyle = "#ef4444"; // red-500
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      } else if (judgeMode === "incorrect") {
+        ctx.fillStyle = "#3b82f6"; // blue-500
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+      // draw cached strokes
       ctx.drawImage(offscreenCanvas, 0, 0);
 
       // 描画中のストロークがあれば、メインキャンバスに描画
@@ -212,7 +254,16 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
         const points = currentStroke.points;
 
         if (points.length > 1) {
-          ctx.strokeStyle = currentStroke.color;
+          // when judged, invert pure black strokes to white for visibility
+          const strokeColorRaw = currentStroke.color || "#000";
+          let strokeColor = strokeColorRaw;
+          if (
+            judgeMode &&
+            (strokeColorRaw === "#000" || strokeColorRaw === "black")
+          ) {
+            strokeColor = "#fff";
+          }
+          ctx.strokeStyle = strokeColor;
           ctx.lineWidth = currentStroke.width;
           ctx.lineCap = "round";
           ctx.lineJoin = "round";
@@ -235,9 +286,17 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
           ctx.globalCompositeOperation = "source-over";
         }
       }
-    }, [strokes, isDrawing]);
+    }, [strokes, isDrawing, judgeMode, canvasSize.width, canvasSize.height]);
 
     function handlePointerDown(e: React.PointerEvent) {
+      // DEBUG: log pointerdown and readOnly state
+      try {
+        // eslint-disable-next-line no-console
+        console.debug("Canvas pointerdown", {
+          isReadOnly,
+          pointerId: e.pointerId,
+        });
+      } catch (err) {}
       if (isReadOnly) return;
 
       const canvas = canvasRef.current;
@@ -258,6 +317,10 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
     }
 
     function handlePointerMove(e: React.PointerEvent) {
+      try {
+        // eslint-disable-next-line no-console
+        console.debug("Canvas pointermove", { isDrawing, isReadOnly });
+      } catch (err) {}
       const canvas = canvasRef.current;
       if (!canvas) return;
 
@@ -284,6 +347,10 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
     }
 
     function handlePointerUp(e: React.PointerEvent) {
+      try {
+        // eslint-disable-next-line no-console
+        console.debug("Canvas pointerup", { isDrawing, isReadOnly });
+      } catch (err) {}
       if (isReadOnly) return;
 
       // クリーンアップ
@@ -307,10 +374,23 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
       }
       if (finished && typeof onStrokeComplete === "function") {
         try {
-          onStrokeComplete(finished as Stroke);
+          const canvas = canvasRef.current;
+          const meta = canvas
+            ? { canvasWidth: canvas.width, canvasHeight: canvas.height }
+            : null;
+          onStrokeComplete({ ...(finished as Stroke), metadata: meta });
         } catch (err) {
           // ignore
         }
+      }
+      // apply any pending server-supplied strokes after finishing the local stroke
+      try {
+        if (pendingReplaceRef.current) {
+          replaceStrokes(pendingReplaceRef.current);
+          pendingReplaceRef.current = null;
+        }
+      } catch (err) {
+        // ignore
       }
     }
 
@@ -330,10 +410,23 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
         const finished = endDrawing();
         if (finished && typeof onStrokeComplete === "function") {
           try {
-            onStrokeComplete(finished as Stroke);
+            const canvas = canvasRef.current;
+            const meta = canvas
+              ? { canvasWidth: canvas.width, canvasHeight: canvas.height }
+              : null;
+            onStrokeComplete({ ...(finished as Stroke), metadata: meta });
           } catch (err) {
             // ignore
           }
+        }
+        // apply any pending server-supplied strokes after finishing the local stroke
+        try {
+          if (pendingReplaceRef.current) {
+            replaceStrokes(pendingReplaceRef.current);
+            pendingReplaceRef.current = null;
+          }
+        } catch (err) {
+          // ignore
         }
         // release pointer capture if present
         try {
@@ -353,14 +446,53 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
 
     useImperativeHandle(ref, () => ({
       clear: () => {
+        // clear strokes immediately and drop any buffered server-supplied strokes
+        pendingReplaceRef.current = null;
         clearCanvas();
       },
       // allow parent to replace strokes (used when syncing from server)
       loadStrokes: (s: Stroke[]) => {
         try {
-          replaceStrokes(s ?? []);
+          // If currently drawing, buffer the incoming strokes and apply
+          // after the draw finishes to avoid wiping the current stroke.
+          if (isDrawing) {
+            pendingReplaceRef.current = s ?? [];
+          } else {
+            replaceStrokes(s ?? []);
+          }
         } catch (e) {
           // ignore
+        }
+      },
+      getSnapshot: async (maxSize = 1024) => {
+        const canvas = canvasRef.current;
+        const offscreen = offscreenCanvasRef.current;
+        if (!canvas || !offscreen) return null;
+        try {
+          // create a temporary canvas to scale down if needed
+          const srcW = canvas.width;
+          const srcH = canvas.height;
+          let dstW = srcW;
+          let dstH = srcH;
+          if (Math.max(srcW, srcH) > maxSize) {
+            const ratio = maxSize / Math.max(srcW, srcH);
+            dstW = Math.round(srcW * ratio);
+            dstH = Math.round(srcH * ratio);
+          }
+          if (dstW === srcW && dstH === srcH) {
+            return (canvas as HTMLCanvasElement).toDataURL("image/png");
+          }
+
+          const tmp = document.createElement("canvas");
+          tmp.width = dstW;
+          tmp.height = dstH;
+          const tctx = tmp.getContext("2d");
+          if (!tctx)
+            return (canvas as HTMLCanvasElement).toDataURL("image/png");
+          tctx.drawImage(canvas, 0, 0, srcW, srcH, 0, 0, dstW, dstH);
+          return tmp.toDataURL("image/png");
+        } catch (e) {
+          return null;
         }
       },
     }));
@@ -368,6 +500,16 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
     return (
       <div className="flex flex-col h-full w-full">
         <div ref={containerRef} className="relative w-full h-full">
+          {/* optional stroke-count overlay */}
+          {showStrokeCount && (
+            <div
+              style={{ zIndex: 50 }}
+              className="absolute top-2 left-2 bg-black text-white text-xs px-2 py-1 rounded opacity-80 pointer-events-none"
+            >
+              {/* strokes length comes from closure via strokes variable */}
+              Strokes: {strokes.length} {isDrawing ? "(drawing)" : ""}
+            </div>
+          )}
           <canvas
             ref={canvasRef}
             width={canvasSize.width}

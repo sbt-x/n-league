@@ -7,13 +7,18 @@ export type WhiteboardProps = {
   showToolbar?: boolean;
   isReadOnly?: boolean;
   isDimmed?: boolean;
+  /** when true, show stroke count overlay on the canvas (default: false) */
+  showStrokeCount?: boolean;
   onStrokeComplete?: (stroke: any) => void;
   initialStrokes?: any[];
+  /** show judgment visualization on this board (for local player's board) */
+  judgeMode?: "correct" | "incorrect" | null;
 };
 
 export type WhiteboardHandle = {
   clear: () => void;
   loadStrokes?: (s: any[]) => void;
+  getSnapshot?: (maxSize?: number) => Promise<string | null>;
 };
 
 export const Whiteboard = forwardRef<WhiteboardHandle, WhiteboardProps>(
@@ -22,8 +27,10 @@ export const Whiteboard = forwardRef<WhiteboardHandle, WhiteboardProps>(
       showToolbar = false,
       isReadOnly = false,
       isDimmed = false,
+      showStrokeCount = false,
       onStrokeComplete,
       initialStrokes,
+      judgeMode = null,
     },
     ref
   ) => {
@@ -31,6 +38,7 @@ export const Whiteboard = forwardRef<WhiteboardHandle, WhiteboardProps>(
     const canvasRef = React.useRef<{
       clear: () => void;
       loadStrokes?: (s: any[]) => void;
+      getSnapshot?: (maxSize?: number) => Promise<string | null>;
     }>(null);
 
     useImperativeHandle(ref, () => ({
@@ -42,6 +50,13 @@ export const Whiteboard = forwardRef<WhiteboardHandle, WhiteboardProps>(
           canvasRef.current?.loadStrokes?.(s ?? []);
         } catch (e) {
           // ignore
+        }
+      },
+      getSnapshot: async (maxSize = 1024) => {
+        try {
+          return (await canvasRef.current?.getSnapshot?.(maxSize)) ?? null;
+        } catch (e) {
+          return null;
         }
       },
     }));
@@ -70,6 +85,8 @@ export const Whiteboard = forwardRef<WhiteboardHandle, WhiteboardProps>(
             width={width}
             isReadOnly={isReadOnly}
             isDimmed={isDimmed}
+            showStrokeCount={showStrokeCount}
+            judgeMode={judgeMode}
             onStrokeComplete={onStrokeComplete}
             initialStrokes={initialStrokes}
           />

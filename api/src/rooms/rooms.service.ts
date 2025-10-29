@@ -140,6 +140,120 @@ export class RoomsService {
   }
 
   /**
+   * Fetch room state including rounds and snapshots for gateway emission
+   */
+  async getRoomWithRounds(inviteCode: string) {
+    const room = await (this.prisma as any).room.findUnique({
+      where: { inviteCode },
+      include: {
+        members: true,
+        rounds: {
+          include: { snapshots: { include: { member: true } } },
+          orderBy: { index: "asc" },
+        },
+      },
+    });
+    if (!room) throw new NotFoundException("Room not found");
+
+    const members = room.members.map((m: any) => ({
+      id: m.id,
+      name: m.name,
+      isHost: m.role === Role.host,
+      uuid: m.uuid,
+    }));
+
+    const rounds = (room.rounds ?? []).map((r: any) => ({
+      index: r.index,
+      allCorrect: r.allCorrect,
+      snapshots: (r.snapshots ?? []).reduce(
+        (acc: any, s: any) => {
+          acc[s.member.uuid] = {
+            pngBase64: s.png,
+            updatedAt: s.updatedAt,
+            judgment: s.judgment,
+          };
+          return acc;
+        },
+        {} as Record<string, any>
+      ),
+      judgments: (r.snapshots ?? []).reduce(
+        (acc: any, s: any) => {
+          acc[s.member.uuid] = s.judgment;
+          return acc;
+        },
+        {} as Record<string, boolean | null>
+      ),
+    }));
+
+    return {
+      roomId: room.id,
+      hostId: members.find((m) => m.isHost)?.id,
+      roomName: room.name,
+      maxPlayers: room.maxPlayers,
+      members,
+      isFull: members.filter((m) => !m.isHost).length >= room.maxPlayers,
+      rounds,
+    };
+  }
+
+  async submitSnapshot(
+    inviteCode: string,
+    memberUuid: string,
+    pngBase64: string
+  ) {
+    const room = await this.findRoomByInviteCode(inviteCode);
+    if (!room) throw new NotFoundException("Room not found");
+    const member = await (this.prisma as any).member.findFirst({
+      where: { roomId: room.id, uuid: memberUuid },
+    });
+    if (!member) throw new NotFoundException("Member not found");
+
+    // find or create latest round for this room: use highest index or create 0
+    let round = await (this.prisma as any).round.findFirst({
+      where: { roomId: room.id },
+      orderBy: { index: "desc" },
+    });
+    if (!round) {
+      round = await (this.prisma as any).round.create({
+        data: { roomId: room.id, index: 0 },
+      });
+    }
+
+    // upsert snapshot
+    await (this.prisma as any).roundSnapshot.upsert({
+      where: { roundId_memberId: { roundId: round.id, memberId: member.id } },
+      create: { roundId: round.id, memberId: member.id, png: pngBase64 },
+      update: { png: pngBase64, updatedAt: new Date() },
+    });
+    // emit state change
+    this.eventEmitter.emit("room.stateChanged", inviteCode);
+  }
+
+  async judgePlayer(inviteCode: string, memberUuid: string, judgment: boolean) {
+    const room = await this.findRoomByInviteCode(inviteCode);
+    if (!room) throw new NotFoundException("Room not found");
+    const member = await (this.prisma as any).member.findFirst({
+      where: { roomId: room.id, uuid: memberUuid },
+    });
+    if (!member) throw new NotFoundException("Member not found");
+
+    // find latest round
+    const round = await (this.prisma as any).round.findFirst({
+      where: { roomId: room.id },
+      orderBy: { index: "desc" },
+    });
+    if (!round) throw new NotFoundException("Round not found");
+
+    await (this.prisma as any).roundSnapshot.upsert({
+      where: { roundId_memberId: { roundId: round.id, memberId: member.id } },
+      create: { roundId: round.id, memberId: member.id, judgment },
+      update: { judgment, updatedAt: new Date() },
+    });
+
+    this.eventEmitter.emit("room.stateChanged", inviteCode);
+  }
+
+  /**
    * ルームに入室する
    *
    * @param roomId

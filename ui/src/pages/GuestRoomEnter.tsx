@@ -35,7 +35,13 @@ const GuestRoomEnter: React.FC = () => {
       if (memberUuid) setCookie("memberId", memberUuid);
       navigate(`/rooms/${roomId}`);
     } catch (err: any) {
-      setError(err.response?.data?.message || "入室に失敗しました");
+      const msg =
+        err?.response?.data?.message || err?.message || "入室に失敗しました";
+      if (msg === "Room is full") {
+        setError("部屋の定員に達しています。入室できません。");
+      } else {
+        setError(msg.toString());
+      }
     }
   };
 

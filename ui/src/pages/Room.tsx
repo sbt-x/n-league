@@ -16,6 +16,7 @@ const Room: React.FC = () => {
   const [showNameModal, setShowNameModal] = React.useState(false);
   const [guestName, setGuestName] = React.useState("");
   const [joining, setJoining] = React.useState(false);
+  const [joinError, setJoinError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     let mounted = true;
@@ -121,8 +122,9 @@ const Room: React.FC = () => {
             <div className="flex gap-2 justify-end">
               <button
                 onClick={() => {
-                  // cancel: keep modal open or close? close to allow leaving
+                  // Navigate back to top when cancelling join flow
                   setShowNameModal(false);
+                  navigate("/");
                 }}
                 disabled={joining}
                 className="px-4 py-2 rounded border"
@@ -132,6 +134,7 @@ const Room: React.FC = () => {
               <button
                 onClick={async () => {
                   if (!guestName.trim()) return;
+                  setJoinError(null);
                   setJoining(true);
                   try {
                     const token = getCookie("userJwt");
@@ -156,9 +159,19 @@ const Room: React.FC = () => {
                     } catch (e) {
                       // ignore
                     }
-                  } catch (e) {
+                  } catch (e: any) {
                     console.error("join failed", e);
-                    // optionally show an error message here
+                    const msg =
+                      e?.response?.data?.message ||
+                      e?.message ||
+                      "入室に失敗しました";
+                    if (msg === "Room is full") {
+                      setJoinError(
+                        "部屋の定員に達しています。入室できません。"
+                      );
+                    } else {
+                      setJoinError(msg.toString());
+                    }
                   } finally {
                     setJoining(false);
                   }
@@ -169,6 +182,9 @@ const Room: React.FC = () => {
                 {joining ? "送信中..." : "参加する"}
               </button>
             </div>
+            {joinError && (
+              <div className="mt-3 text-red-600 text-sm">{joinError}</div>
+            )}
           </div>
         </div>
       )}

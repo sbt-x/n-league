@@ -137,6 +137,26 @@ const HostRoom: React.FC<HostRoomProps> = ({ roomId: propRoomId }) => {
   // Hostを含む全メンバーリスト
   const members = roomState ? roomState.members : [];
 
+  // compute guest counts (exclude host) and submitted count for display on the lock button
+  const { guestCount, submittedCount, submittedPercent } = React.useMemo(() => {
+    try {
+      const guestMembers = (members ?? []).filter((m: any) => !m.isHost);
+      const guestIds = guestMembers.map((m: any) => m.uuid ?? m.id);
+      const gCount = guestIds.length;
+      const sCount = guestIds.filter((id: string) =>
+        completedMemberIds.includes(id)
+      ).length;
+      const pct = gCount > 0 ? (sCount / gCount) * 100 : 0;
+      return {
+        guestCount: gCount,
+        submittedCount: sCount,
+        submittedPercent: pct,
+      };
+    } catch (e) {
+      return { guestCount: 0, submittedCount: 0, submittedPercent: 0 };
+    }
+  }, [members, completedMemberIds]);
+
   // helpers: check host
   const isHost = React.useMemo(() => {
     if (!roomState || !memberId) return false;
@@ -566,10 +586,15 @@ const HostRoom: React.FC<HostRoomProps> = ({ roomId: propRoomId }) => {
                   )}
                   {currentPhase === "IN_ROUND" && (
                     <button
-                      className="bg-yellow-600 text-white px-3 py-2 rounded"
+                      className="text-white px-3 py-2 rounded"
                       onClick={() => emitLockAnswers()}
+                      style={{
+                        // left portion green (submitted), right portion red (not submitted)
+                        background: `linear-gradient(90deg, #16a34a 0% ${submittedPercent}%, #dc2626 ${submittedPercent}% 100%)`,
+                      }}
+                      title={`${submittedCount}/${guestCount} が送信済み`}
                     >
-                      回答ロック
+                      回答ロック {submittedCount}/{guestCount}
                     </button>
                   )}
                   {currentPhase === "LOCKED" && (

@@ -286,7 +286,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(
           ctx.globalCompositeOperation = "source-over";
         }
       }
-  }, [strokes, isDrawing, judgeMode, canvasSize.width, canvasSize.height]);
+    }, [strokes, isDrawing, judgeMode, canvasSize.width, canvasSize.height]);
 
     function handlePointerDown(e: React.PointerEvent) {
       // DEBUG: log pointerdown and readOnly state
